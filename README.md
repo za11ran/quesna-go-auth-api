@@ -148,6 +148,20 @@ Authorization: Bearer <التوكن اللي رجع من verify-otp>
 | `GET`   | `/api/auth/me` | — (هيدر Authorization) | البروفايل كامل (الاسم، الصورة، القرية، `created_at` ...) |
 | `PATCH` | `/api/auth/me` | أي من: `name, avatar_url, email, birth_date, gender, village_id, lang` | تعديل البروفايل |
 
+### Customer Catalog (قراءة — هيدر `LANG: ar|en`)
+
+| الطريقة | المسار | الوظيفة |
+|--------|--------|---------|
+| `GET` | `/api/vendors?type=&search=&page=&per_page=` | قائمة التجّار (envelope `{data, meta}`) |
+| `GET` | `/api/vendors/:id` | تفاصيل تاجر |
+| `GET` | `/api/vendors/:id/products?category=&search=&page=` | منتجات تاجر (مع `options` و `discount`) |
+| `GET` | `/api/vendors/:id/products/:productId` | تفاصيل منتج |
+| `GET` | `/api/home/categories` | أقسام الهوم |
+| `GET` | `/api/products/most-requested` | الأكثر طلبًا |
+| `GET` | `/api/offers` | العروض الفعّالة |
+
+عقود الـ JSON في [`BACKEND_HANDOFF.md`](./BACKEND_HANDOFF.md) §10. الأحجام تُرجع بـ `price` نهائي + `additional_price` للتوافق.
+
 الجسم يُقبل كـ **form-data** أو **JSON**.
 
 **الأخطاء:** كل رد خطأ فيه `error_code` ثابت (زي `INVALID_PHONE`) + `error` نص عربي.
