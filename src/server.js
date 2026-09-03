@@ -17,6 +17,7 @@ app.get('/', (req, res) =>
 app.use('/api/villages', require('./routes.villages'));
 app.use('/api/auth', require('./routes.auth'));
 app.use('/api', require('./catalog'));   // vendors, products, home/categories, offers
+app.use('/api', require('./orders'));    // orders, addresses, notifications, devices
 
 // مسار غير موجود
 app.use((req, res) =>

@@ -80,6 +80,8 @@ function discountFor(product, offers) {
   let best = null;
   for (const off of offers) {
     if (!off.is_active) continue;
+    // خصم بمبلغ ثابت ينطبق على منتج محدد فقط؛ store/category بمبلغ = خصم على مستوى الطلب (مش هنا)
+    if (off.discount_type === 'amount' && off.scope !== 'product') continue;
     if (off.starts_at && new Date(off.starts_at).getTime() > now) continue;
     if (off.ends_at && new Date(off.ends_at).getTime() < now) continue;
     const matches =

@@ -162,6 +162,21 @@ Authorization: Bearer <التوكن اللي رجع من verify-otp>
 
 عقود الـ JSON في [`BACKEND_HANDOFF.md`](./BACKEND_HANDOFF.md) §10. الأحجام تُرجع بـ `price` نهائي + `additional_price` للتوافق.
 
+### Customer Orders (تتطلب توكن)
+
+| الطريقة | المسار | الوظيفة |
+|--------|--------|---------|
+| `POST` | `/api/orders` | إنشاء طلب من السلة (متعدد التجّار، تحقق الحد الأدنى/المخزون/الفتح، تقسيم الرسوم) |
+| `GET` | `/api/orders` | طلباتي (paginated) |
+| `GET` | `/api/orders/:id` | تفاصيل + `status_history` (§10.7) |
+| `GET` | `/api/orders/:id/receipt` | الرسيت (§10.8) |
+| `POST` | `/api/orders/:id/cancel` | إلغاء — قبل قبول المتجر فقط |
+| `GET/POST/DELETE` | `/api/addresses[/:id]` | عناوين المستخدم (§10.9) |
+| `GET` | `/api/notifications` · `POST /api/notifications/:id/read` | إشعارات المستخدم (§10.12) |
+| `POST` | `/api/devices` | تسجيل توكن جهاز الـ push `{token, platform}` |
+
+> إشعارات التاجر/المشرف/الدليفري و decrement المخزون عند القبول → مرحلة Vendor/Dispatch/Driver.
+
 الجسم يُقبل كـ **form-data** أو **JSON**.
 
 **الأخطاء:** كل رد خطأ فيه `error_code` ثابت (زي `INVALID_PHONE`) + `error` نص عربي.

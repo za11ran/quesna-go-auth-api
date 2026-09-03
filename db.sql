@@ -249,3 +249,110 @@ VALUES
  ('off_koshari', 'koshari-abbas', 'خصم 10 جنيه على الطلب', 'EGP 10 off', 'store', NULL,
   'amount', 10, now() - interval '1 day', now() + interval '30 days', true)
 ON CONFLICT (id) DO NOTHING;
+
+-- ============================================================================
+--  الطلبات + العناوين + الإشعارات + أجهزة الـ push  (Customer API §7 / §10.7-10.9)
+-- ============================================================================
+
+CREATE SEQUENCE IF NOT EXISTS order_seq START 1001;
+
+CREATE TABLE IF NOT EXISTS user_addresses (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    label       VARCHAR(60),
+    details     TEXT NOT NULL,
+    lat         NUMERIC(9,6),
+    lng         NUMERIC(9,6),
+    is_default  BOOLEAN NOT NULL DEFAULT false,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_user_addresses_user ON user_addresses(user_id);
+
+CREATE TABLE IF NOT EXISTS orders (
+    id             VARCHAR(30) PRIMARY KEY,
+    customer_id    UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    status         VARCHAR(20) NOT NULL DEFAULT 'pending',
+    payment_method VARCHAR(10) NOT NULL DEFAULT 'cash',
+    payment_status VARCHAR(10) NOT NULL DEFAULT 'pending',
+    address_id     UUID,
+    address_text   TEXT,
+    address_lat    NUMERIC(9,6),
+    address_lng    NUMERIC(9,6),
+    notes          TEXT,
+    subtotal       NUMERIC(10,2) NOT NULL DEFAULT 0,
+    delivery_total NUMERIC(10,2) NOT NULL DEFAULT 0,
+    discount_total NUMERIC(10,2) NOT NULL DEFAULT 0,
+    total          NUMERIC(10,2) NOT NULL DEFAULT 0,
+    driver_id      VARCHAR(60),
+    dispatcher_id  UUID,
+    accepted_at    TIMESTAMPTZ,
+    ready_at        TIMESTAMPTZ,
+    assigned_at     TIMESTAMPTZ,
+    picked_up_at    TIMESTAMPTZ,
+    delivered_at    TIMESTAMPTZ,
+    cancelled_at    TIMESTAMPTZ,
+    cancel_reason   TEXT,
+    placed_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id, placed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_status   ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_driver   ON orders(driver_id);
+
+CREATE TABLE IF NOT EXISTS order_vendors (
+    order_id     VARCHAR(30) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    vendor_id    VARCHAR(60) NOT NULL,
+    vendor_name  VARCHAR(180) NOT NULL,
+    subtotal     NUMERIC(10,2) NOT NULL DEFAULT 0,
+    delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0,
+    PRIMARY KEY (order_id, vendor_id)
+);
+
+CREATE TABLE IF NOT EXISTS order_items (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    order_id    VARCHAR(30) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    vendor_id   VARCHAR(60) NOT NULL,
+    product_id  VARCHAR(60),
+    name        VARCHAR(180) NOT NULL,
+    option_id   VARCHAR(60),
+    option_name VARCHAR(120),
+    unit_price  NUMERIC(10,2) NOT NULL,
+    base_price  NUMERIC(10,2) NOT NULL,
+    quantity    SMALLINT NOT NULL,
+    line_total  NUMERIC(10,2) NOT NULL,
+    note        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+
+CREATE TABLE IF NOT EXISTS order_status_history (
+    id        BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    order_id  VARCHAR(30) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    status    VARCHAR(20) NOT NULL,
+    by_role   VARCHAR(20),
+    at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_order_status_hist ON order_status_history(order_id, at);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title      VARCHAR(180) NOT NULL,
+    body       TEXT NOT NULL DEFAULT '',
+    type       VARCHAR(40) NOT NULL,
+    order_id   VARCHAR(30),
+    data       JSONB,
+    is_read    BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS user_devices (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token      TEXT NOT NULL,
+    platform   VARCHAR(10),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, token)
+);
