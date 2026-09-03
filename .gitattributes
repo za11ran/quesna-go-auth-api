@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# اسكربتات السيرفر لازم تفضل LF عشان bash على لينكس
+*.sh text eol=lf
+deploy/** text eol=lf
