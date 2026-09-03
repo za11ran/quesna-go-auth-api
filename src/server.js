@@ -18,6 +18,8 @@ app.use('/api/villages', require('./routes.villages'));
 app.use('/api/auth', require('./routes.auth'));
 app.use('/api', require('./catalog'));   // vendors, products, home/categories, offers
 app.use('/api', require('./orders'));    // orders, addresses, notifications, devices
+app.use('/api/vendor', require('./vendor'));  // لوحة التاجر
+app.use('/api/admin', require('./admin'));    // لوحة الأدمن + مراجعة Change Requests
 
 // مسار غير موجود
 app.use((req, res) =>

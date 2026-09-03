@@ -334,18 +334,24 @@ CREATE TABLE IF NOT EXISTS order_status_history (
 );
 CREATE INDEX IF NOT EXISTS idx_order_status_hist ON order_status_history(order_id, at);
 
+-- user_id يشير لعميل (users) أو موظف لوحة (staff_users) حسب recipient_type — بدون FK
 CREATE TABLE IF NOT EXISTS notifications (
-    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    title      VARCHAR(180) NOT NULL,
-    body       TEXT NOT NULL DEFAULT '',
-    type       VARCHAR(40) NOT NULL,
-    order_id   VARCHAR(30),
-    data       JSONB,
-    is_read    BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id        UUID NOT NULL,
+    recipient_type VARCHAR(10) NOT NULL DEFAULT 'customer',   -- customer | staff
+    title          VARCHAR(180) NOT NULL,
+    body           TEXT NOT NULL DEFAULT '',
+    type           VARCHAR(40) NOT NULL,
+    order_id       VARCHAR(30),
+    data           JSONB,
+    is_read        BOOLEAN NOT NULL DEFAULT false,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
+-- ترحيل للنسخ القديمة اللي كان فيها FK
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_user_id_fkey;
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_user_id_fk;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS recipient_type VARCHAR(10) NOT NULL DEFAULT 'customer';
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, recipient_type, is_read, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS user_devices (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -356,3 +362,68 @@ CREATE TABLE IF NOT EXISTS user_devices (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (user_id, token)
 );
+
+-- ============================================================================
+--  حسابات لوحة التحكم (أدمن/مشرف/دليفري/صاحب مكان) + طلبات التغيير (Change Requests)
+--  BACKEND_HANDOFF.md §5, §8, §9, §10.11
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS staff_users (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name          VARCHAR(150) NOT NULL,
+    email         VARCHAR(150) UNIQUE,
+    phone         VARCHAR(20)  UNIQUE,
+    password_hash TEXT NOT NULL,
+    role          VARCHAR(20)  NOT NULL,   -- admin | dispatcher | driver | vendor_owner | vendor_staff
+    vendor_id     VARCHAR(60) REFERENCES vendors(id) ON DELETE CASCADE,
+    driver_id     VARCHAR(60),
+    is_active     BOOLEAN NOT NULL DEFAULT true,
+    last_login_at TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_staff_role   ON staff_users(role);
+CREATE INDEX IF NOT EXISTS idx_staff_vendor ON staff_users(vendor_id);
+
+CREATE TABLE IF NOT EXISTS change_requests (
+    id             VARCHAR(30) PRIMARY KEY,
+    vendor_id      VARCHAR(60) NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
+    submitted_by   UUID REFERENCES staff_users(id) ON DELETE SET NULL,
+    entity_type    VARCHAR(20) NOT NULL,   -- vendor | product | product_option | offer
+    entity_id      VARCHAR(60),
+    action         VARCHAR(10) NOT NULL,   -- create | update | delete
+    current_values JSONB NOT NULL DEFAULT '{}',
+    new_values     JSONB NOT NULL DEFAULT '{}',
+    status         VARCHAR(15) NOT NULL DEFAULT 'pending',  -- pending | approved | rejected | cancelled
+    reviewed_by    UUID REFERENCES staff_users(id) ON DELETE SET NULL,
+    review_note    TEXT,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    reviewed_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_cr_status ON change_requests(status);
+CREATE INDEX IF NOT EXISTS idx_cr_vendor ON change_requests(vendor_id);
+CREATE SEQUENCE IF NOT EXISTS change_request_seq START 1;
+
+-- has_pending_change flag على المنتجات
+ALTER TABLE products ADD COLUMN IF NOT EXISTS has_pending_change BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE vendors  ADD COLUMN IF NOT EXISTS has_pending_change BOOLEAN NOT NULL DEFAULT false;
+
+-- إعدادات عامة (منها approval-rules)
+CREATE TABLE IF NOT EXISTS app_settings (
+    key        VARCHAR(60) PRIMARY KEY,
+    value      JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO app_settings (key, value) VALUES
+ ('approval_rules', '{"vendor_fields":["name_ar","name_en","delivery_fee","min_order","logo","cover_image"],"product_create":true,"product_update_fields":["name_ar","name_en","price","category","description_ar","description_en"],"product_delete":true,"product_options":true,"offers":true,"instant":["stock","is_available","is_open"]}')
+ON CONFLICT (key) DO NOTHING;
+
+-- ---------- حسابات تجريبية ----------
+-- كلمة السر: admin1234 / metro1234
+INSERT INTO staff_users (name, email, password_hash, role) VALUES
+ ('آدمن المنصة', 'admin@quesnago.com', '$2a$10$0wtHlVJfSpsWV3qM6PAU4ewIVRP9sDwNCUlV4WCL7iNYKylp3fkxS', 'admin')
+ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO staff_users (name, email, password_hash, role, vendor_id) VALUES
+ ('صاحب مترو ماركت', 'owner@metro.test', '$2a$10$57UP2ntlwmC0n0sEBq5a8OQD1ijdkki759kAIYORznsdpHGvDqRCG', 'vendor_owner', 'metro')
+ON CONFLICT (email) DO NOTHING;
