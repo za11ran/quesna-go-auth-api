@@ -1,0 +1,539 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Quesna Go Auth API",
+    "version": "1.0.0",
+    "description": "Auth API for the Quesna Go app. Flow: register or login -> OTP code is sent -> verify-otp -> returns a JWT token. In development mode the code is also returned in the response as dev_otp. Request bodies are sent as form-data. JSON is also accepted by the server.\n"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4000",
+      "description": "Local"
+    },
+    {
+      "url": "https://REPLACE-WITH-YOUR-DEPLOYED-URL",
+      "description": "Production (change later)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth"
+    },
+    {
+      "name": "Villages"
+    }
+  ],
+  "paths": {
+    "/api/villages": {
+      "get": {
+        "tags": [
+          "Villages"
+        ],
+        "operationId": "listVillages",
+        "summary": "List villages",
+        "description": "Villages list for the sign-up dropdown.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "count": 30,
+                  "villages": [
+                    {
+                      "id": 1,
+                      "name": "كفر داود",
+                      "governorate": "المنوفية"
+                    },
+                    {
+                      "id": 2,
+                      "name": "ميت أبو الكوم",
+                      "governorate": "المنوفية"
+                    }
+                  ]
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "villages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "governorate": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "register",
+        "summary": "Register",
+        "description": "Create an account and send an OTP code. Body is form-data.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "example": {
+                "name": "أحمد محمد",
+                "phone": "01065465118",
+                "village_id": 1
+              },
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "phone",
+                  "village_id"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string",
+                    "description": "Egyptian mobile. Accepts 01065465118, 1065465118 or +201065465118"
+                  },
+                  "village_id": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Account created, OTP sent",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "تم إرسال كود التحقق",
+                  "phone": "+201065465118",
+                  "next": "otp",
+                  "dev_otp": "483920"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/OtpSent"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Phone already registered",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": false,
+                  "error": "الرقم مسجّل بالفعل، من فضلك سجّل الدخول"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Missing or invalid data",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": false,
+                  "error": "رقم موبايل مصري غير صحيح (مثال: 01065465118)"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "login",
+        "summary": "Login",
+        "description": "Log in with the phone number and send an OTP code. Body is form-data.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "example": {
+                "phone": "01065465118"
+              },
+              "schema": {
+                "type": "object",
+                "required": [
+                  "phone"
+                ],
+                "properties": {
+                  "phone": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP sent",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "تم إرسال كود الدخول",
+                  "phone": "+201065465118",
+                  "next": "otp",
+                  "dev_otp": "512804"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/OtpSent"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No account for this phone",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": false,
+                  "error": "لا يوجد حساب بهذا الرقم، أنشئ حساب جديد"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid phone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/verify-otp": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "verifyOtp",
+        "summary": "Verify OTP",
+        "description": "Confirm the OTP code and get the token. Body is form-data.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "example": {
+                "phone": "01065465118",
+                "code": "483920"
+              },
+              "schema": {
+                "type": "object",
+                "required": [
+                  "phone",
+                  "code"
+                ],
+                "properties": {
+                  "phone": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string",
+                    "description": "6 digits"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success, token returned",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature",
+                  "user": {
+                    "id": "3f2a9c10-7b1e-4d5a-9c2b-1e2f3a4b5c6d",
+                    "name": "أحمد محمد",
+                    "phone": "+201065465118",
+                    "village_id": 1,
+                    "status": "active",
+                    "is_new": true
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "token": {
+                      "type": "string"
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Code expired or a new code is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wrong code",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": false,
+                  "error": "الكود غير صحيح (باقي 4 محاولات)"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/resend-otp": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "resendOtp",
+        "summary": "Resend OTP",
+        "description": "Send a new OTP code. Body is form-data.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "example": {
+                "phone": "01065465118"
+              },
+              "schema": {
+                "type": "object",
+                "required": [
+                  "phone"
+                ],
+                "properties": {
+                  "phone": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New code sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtpSent"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No account for this phone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "currentUser",
+        "summary": "Current user",
+        "description": "Returns the current user. Requires a token.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "user": {
+                    "id": "3f2a9c10-7b1e-4d5a-9c2b-1e2f3a4b5c6d",
+                    "name": "أحمد محمد",
+                    "phone": "+201065465118",
+                    "village_id": 1,
+                    "village_name": "كفر داود",
+                    "status": "active"
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Login required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "OtpSent": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "next": {
+            "type": "string"
+          },
+          "dev_otp": {
+            "type": "string",
+            "description": "Only present in development mode (NODE_ENV=development)"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "village_id": {
+            "type": "integer"
+          },
+          "village_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "is_new": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
