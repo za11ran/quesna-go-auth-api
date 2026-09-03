@@ -18,13 +18,15 @@ app.use('/api/villages', require('./routes.villages'));
 app.use('/api/auth', require('./routes.auth'));
 
 // مسار غير موجود
-app.use((req, res) => res.status(404).json({ success: false, error: 'المسار غير موجود' }));
+app.use((req, res) =>
+  res.status(404).json({ success: false, error_code: 'NOT_FOUND', error: 'المسار غير موجود' })
+);
 
 // معالج الأخطاء العام
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error('❌', err);
-  res.status(500).json({ success: false, error: 'خطأ في السيرفر' });
+  res.status(500).json({ success: false, error_code: 'SERVER_ERROR', error: 'خطأ في السيرفر' });
 });
 
 const port = process.env.PORT || 4000;

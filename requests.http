@@ -6,7 +6,7 @@
 ### 1) قائمة القرى (للـ dropdown في شاشة التسجيل)
 GET {{baseUrl}}/api/villages
 
-### 2) إنشاء حساب جديد  (الاسم + الفون + رقم القرية)
+### 2) إنشاء حساب جديد  (الاسم + الفون + القرية + حقول بروفايل اختيارية)
 # الرد هيرجّع dev_otp في وضع التطوير - انسخه للطلب رقم 3
 POST {{baseUrl}}/api/auth/register
 Content-Type: application/json
@@ -14,7 +14,12 @@ Content-Type: application/json
 {
   "name": "أحمد محمد",
   "phone": "01065465118",
-  "village_id": 1
+  "village_id": 1,
+  "avatar_url": "https://i.pravatar.cc/150?img=12",
+  "email": "ahmed@example.com",
+  "birth_date": "1998-04-25",
+  "gender": "male",
+  "preferred_language": "ar"
 }
 
 ### 3) تأكيد كود الـ OTP بعد التسجيل
@@ -55,3 +60,14 @@ Content-Type: application/json
 ### 7) بيانات حسابي (محمي) - حط التوكن اللي رجع من verify-otp
 GET {{baseUrl}}/api/auth/me
 Authorization: Bearer ضع_التوكن_هنا
+
+### 8) تعديل البروفايل (محمي) - ابعت الحقول اللي اتغيّرت بس
+PATCH {{baseUrl}}/api/auth/me
+Authorization: Bearer ضع_التوكن_هنا
+Content-Type: application/json
+
+{
+  "name": "أحمد م.",
+  "avatar_url": "https://i.pravatar.cc/150?img=5",
+  "preferred_language": "en"
+}

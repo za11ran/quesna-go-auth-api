@@ -31,8 +31,11 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at         TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
--- عمود القرية (يُضاف سواء الجدول جديد أو قديم)
-ALTER TABLE users ADD COLUMN IF NOT EXISTS village_id INTEGER REFERENCES villages(id);
+-- أعمدة إضافية للحساب/البروفايل (تُضاف سواء الجدول جديد أو قديم)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS village_id  INTEGER REFERENCES villages(id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url  TEXT;          -- صورة البروفايل (رابط من النت)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date  DATE;          -- تاريخ الميلاد (اختياري)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS gender      VARCHAR(10);   -- 'male' | 'female' (اختياري)
 
 -- ---------- جدول أكواد التحقق OTP ----------
 CREATE TABLE IF NOT EXISTS auth_tokens (

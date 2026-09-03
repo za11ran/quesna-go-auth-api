@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Quesna Go Auth API",
-    "version": "1.0.0",
-    "description": "Auth API for the Quesna Go app. Flow: register or login -> OTP code is sent -> verify-otp -> returns a JWT token. In development mode the code is also returned in the response as dev_otp. Request bodies are sent as form-data. JSON is also accepted by the server.\n"
+    "version": "1.1.0",
+    "description": "Auth API for the Quesna Go app (Arabic + English). Flow: register or login -> OTP code is sent -> verify-otp -> returns a JWT token. In development mode the code is also returned in the response as dev_otp. Request bodies are sent as form-data (JSON is also accepted). Every error carries a stable error_code the app localizes itself (see ERROR_CODES.md).\n"
   },
   "servers": [
     {
@@ -94,7 +94,7 @@
         ],
         "operationId": "register",
         "summary": "Register",
-        "description": "Create an account and send an OTP code. Body is form-data.",
+        "description": "Create an account and send an OTP code. Body is form-data. Required: name, phone, village_id. Optional: avatar_url (image URL), email, birth_date (YYYY-MM-DD), gender (male|female), preferred_language (ar|en).\n",
         "requestBody": {
           "required": true,
           "content": {
@@ -102,7 +102,12 @@
               "example": {
                 "name": "أحمد محمد",
                 "phone": "01065465118",
-                "village_id": 1
+                "village_id": 1,
+                "avatar_url": "https://i.pravatar.cc/150?img=12",
+                "email": "ahmed@example.com",
+                "birth_date": "1998-04-25",
+                "gender": "male",
+                "preferred_language": "ar"
               },
               "schema": {
                 "type": "object",
@@ -121,6 +126,31 @@
                   },
                   "village_id": {
                     "type": "integer"
+                  },
+                  "avatar_url": {
+                    "type": "string",
+                    "description": "Public image URL (http/https)"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "birth_date": {
+                    "type": "string",
+                    "example": "1998-04-25"
+                  },
+                  "gender": {
+                    "type": "string",
+                    "enum": [
+                      "male",
+                      "female"
+                    ]
+                  },
+                  "preferred_language": {
+                    "type": "string",
+                    "enum": [
+                      "ar",
+                      "en"
+                    ]
                   }
                 }
               }
@@ -146,11 +176,12 @@
             }
           },
           "409": {
-            "description": "Phone already registered",
+            "description": "Phone or email already used",
             "content": {
               "application/json": {
                 "example": {
                   "success": false,
+                  "error_code": "ALREADY_REGISTERED",
                   "error": "الرقم مسجّل بالفعل، من فضلك سجّل الدخول"
                 },
                 "schema": {
@@ -165,6 +196,7 @@
               "application/json": {
                 "example": {
                   "success": false,
+                  "error_code": "INVALID_PHONE",
                   "error": "رقم موبايل مصري غير صحيح (مثال: 01065465118)"
                 },
                 "schema": {
@@ -229,6 +261,7 @@
               "application/json": {
                 "example": {
                   "success": false,
+                  "error_code": "ACCOUNT_NOT_FOUND",
                   "error": "لا يوجد حساب بهذا الرقم، أنشئ حساب جديد"
                 },
                 "schema": {
@@ -257,7 +290,7 @@
         ],
         "operationId": "verifyOtp",
         "summary": "Verify OTP",
-        "description": "Confirm the OTP code and get the token. Body is form-data.",
+        "description": "Confirm the OTP code and get the token + full user profile. Body is form-data.",
         "requestBody": {
           "required": true,
           "content": {
@@ -297,8 +330,15 @@
                     "id": "3f2a9c10-7b1e-4d5a-9c2b-1e2f3a4b5c6d",
                     "name": "أحمد محمد",
                     "phone": "+201065465118",
+                    "email": "ahmed@example.com",
+                    "avatar_url": "https://i.pravatar.cc/150?img=12",
+                    "birth_date": "1998-04-25",
+                    "gender": "male",
+                    "preferred_language": "ar",
                     "village_id": 1,
+                    "village_name": "كفر داود",
                     "status": "active",
+                    "created_at": "2026-09-03T18:00:00.000Z",
                     "is_new": true
                   }
                 },
@@ -323,6 +363,11 @@
             "description": "Code expired or a new code is required",
             "content": {
               "application/json": {
+                "example": {
+                  "success": false,
+                  "error_code": "OTP_EXPIRED",
+                  "error": "انتهت صلاحية الكود، اطلب كود جديد"
+                },
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
@@ -335,7 +380,9 @@
               "application/json": {
                 "example": {
                   "success": false,
-                  "error": "الكود غير صحيح (باقي 4 محاولات)"
+                  "error_code": "OTP_WRONG",
+                  "error": "الكود غير صحيح (باقي 4 محاولات)",
+                  "attempts_left": 4
                 },
                 "schema": {
                   "$ref": "#/components/schemas/Error"
@@ -416,7 +463,7 @@
         ],
         "operationId": "currentUser",
         "summary": "Current user",
-        "description": "Returns the current user. Requires a token.",
+        "description": "Returns the full user profile. Requires a token.",
         "security": [
           {
             "bearerAuth": []
@@ -433,9 +480,17 @@
                     "id": "3f2a9c10-7b1e-4d5a-9c2b-1e2f3a4b5c6d",
                     "name": "أحمد محمد",
                     "phone": "+201065465118",
+                    "email": "ahmed@example.com",
+                    "avatar_url": "https://i.pravatar.cc/150?img=12",
+                    "birth_date": "1998-04-25",
+                    "gender": "male",
+                    "preferred_language": "ar",
                     "village_id": 1,
                     "village_name": "كفر داود",
-                    "status": "active"
+                    "status": "active",
+                    "created_at": "2026-09-03T18:00:00.000Z",
+                    "updated_at": "2026-09-03T18:05:00.000Z",
+                    "phone_verified_at": "2026-09-03T18:00:30.000Z"
                   }
                 },
                 "schema": {
@@ -454,6 +509,120 @@
           },
           "401": {
             "description": "Login required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "updateProfile",
+        "summary": "Update profile",
+        "description": "Update the current user's profile. Requires a token. Body is form-data. All fields optional; send only what changes.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "example": {
+                "name": "أحمد م.",
+                "avatar_url": "https://i.pravatar.cc/150?img=5",
+                "email": "ahmed.new@example.com",
+                "birth_date": "1998-04-25",
+                "gender": "male",
+                "village_id": 2,
+                "preferred_language": "en"
+              },
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "birth_date": {
+                    "type": "string",
+                    "example": "1998-04-25"
+                  },
+                  "gender": {
+                    "type": "string",
+                    "enum": [
+                      "male",
+                      "female"
+                    ]
+                  },
+                  "village_id": {
+                    "type": "integer"
+                  },
+                  "preferred_language": {
+                    "type": "string",
+                    "enum": [
+                      "ar",
+                      "en"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated, returns the full profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Login required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email already in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid data / nothing to update",
             "content": {
               "application/json": {
                 "schema": {
@@ -508,17 +677,62 @@
           "phone": {
             "type": "string"
           },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "birth_date": {
+            "type": "string",
+            "nullable": true,
+            "example": "1998-04-25"
+          },
+          "gender": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "male",
+              "female",
+              null
+            ]
+          },
+          "preferred_language": {
+            "type": "string",
+            "enum": [
+              "ar",
+              "en"
+            ]
+          },
           "village_id": {
-            "type": "integer"
+            "type": "integer",
+            "nullable": true
           },
           "village_name": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "status": {
             "type": "string"
           },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "phone_verified_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
           "is_new": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "true = أول تفعيل للحساب (على verify-otp فقط)"
           }
         }
       },
@@ -529,8 +743,18 @@
             "type": "boolean",
             "example": false
           },
+          "error_code": {
+            "type": "string",
+            "description": "كود ثابت يترجمه التطبيق (راجع ERROR_CODES.md)",
+            "example": "INVALID_PHONE"
+          },
           "error": {
-            "type": "string"
+            "type": "string",
+            "description": "نص عربي للتشخيص فقط"
+          },
+          "attempts_left": {
+            "type": "integer",
+            "description": "مع OTP_WRONG فقط"
           }
         }
       }

@@ -2,6 +2,7 @@
 const router = require('express').Router();
 const rateLimit = require('express-rate-limit');
 const multer = require('multer');
+const bcrypt = require('bcryptjs');
 const db = require('./db');
 const { normalizeEgyptPhone } = require('./phone');
 const { issueOtp, deliverOtp } = require('./otp');
@@ -17,40 +18,132 @@ const authLimiter = rateLimit({
   limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, error: 'محاولات كثيرة، جرّب بعد دقيقة' },
+  message: { success: false, error_code: 'RATE_LIMITED', error: 'محاولات كثيرة، جرّب بعد دقيقة' },
 });
 
 const isDev = () => process.env.NODE_ENV !== 'production';
 const withDevOtp = (body, code) => (isDev() ? { ...body, dev_otp: code } : body);
 
+// رد خطأ موحّد: يحمل error_code ثابت (للتطبيق) + رسالة عربية (للتشخيص).
+// التطبيق (عربي/إنجليزي) يترجم error_code عنده — مش بيعتمد على نص الـ error.
+const fail = (res, status, code, message, extra = {}) =>
+  res.status(status).json({ success: false, error_code: code, error: message, ...extra });
+
+// ---- أدوات تحقّق للحقول الاختيارية ----
+// null = لم يُرسل (تجاهله)، undefined = قيمة غير صحيحة (ارفض)، نص = قيمة صحيحة.
+function cleanUrl(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const s = String(v).trim();
+  if (s.length > 2000) return undefined;
+  try {
+    const u = new URL(s);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? s : undefined;
+  } catch {
+    return undefined;
+  }
+}
+function cleanEmail(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const s = String(v).trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) && s.length <= 150 ? s : undefined;
+}
+function cleanBirthDate(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const s = String(v).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return undefined;
+  const d = new Date(s + 'T00:00:00Z');
+  if (Number.isNaN(d.getTime())) return undefined;
+  const year = d.getUTCFullYear();
+  if (year < 1900 || d.getTime() > Date.now()) return undefined;
+  return s;
+}
+function cleanGender(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const s = String(v).trim().toLowerCase();
+  return s === 'male' || s === 'female' ? s : undefined;
+}
+function cleanLang(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const s = String(v).trim().toLowerCase();
+  return s === 'ar' || s === 'en' ? s : undefined;
+}
+
+// أعمدة البروفايل التي تُرجَع للتطبيق
+const PROFILE_SELECT = `
+  SELECT u.id,
+         u.full_name        AS name,
+         u.phone,
+         u.email,
+         u.avatar_url,
+         u.birth_date,
+         u.gender,
+         u.preferred_language,
+         u.status,
+         u.village_id,
+         v.name             AS village_name,
+         u.created_at,
+         u.updated_at,
+         u.phone_verified_at
+    FROM users u
+    LEFT JOIN villages v ON v.id = u.village_id
+   WHERE u.id = $1`;
+
+// يحوّل birth_date من كائن تاريخ إلى نص YYYY-MM-DD
+function shapeUser(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    birth_date: row.birth_date
+      ? new Date(row.birth_date).toISOString().slice(0, 10)
+      : null,
+  };
+}
+
 /* ---------------------------------------------------------------------------
- * 1) إنشاء حساب جديد
- *    POST /api/auth/register
- *    body: { name, phone, village_id }
- *    الرد: { success, phone, next:"otp", dev_otp? }  -> حوّل المستخدم لشاشة OTP
+ * 1) إنشاء حساب جديد            POST /api/auth/register
+ *    body: name, phone, village_id  (+ اختياري: avatar_url, email, birth_date,
+ *                                    gender, preferred_language)
+ *    الرد: { success, phone, next:"otp", dev_otp? }  -> شاشة الـ OTP
  * ------------------------------------------------------------------------- */
 router.post('/register', authLimiter, form, async (req, res, next) => {
   try {
     const { name, phone, village_id } = req.body || {};
 
     if (!name || String(name).trim().length < 2) {
-      return res.status(422).json({ success: false, error: 'الاسم مطلوب (حرفين على الأقل)' });
+      return fail(res, 422, 'NAME_REQUIRED', 'الاسم مطلوب (حرفين على الأقل)');
     }
 
     const p = normalizeEgyptPhone(phone);
-    if (!p.ok) return res.status(422).json({ success: false, error: p.error });
+    if (!p.ok) return fail(res, 422, 'INVALID_PHONE', p.error);
 
     const vid = Number(village_id);
     if (!Number.isInteger(vid) || vid <= 0) {
-      return res.status(422).json({ success: false, error: 'اختر القرية' });
+      return fail(res, 422, 'VILLAGE_REQUIRED', 'اختر القرية');
     }
     const village = await db.query(
       'SELECT id FROM villages WHERE id = $1 AND is_active = true',
       [vid]
     );
     if (village.rowCount === 0) {
-      return res.status(422).json({ success: false, error: 'القرية غير موجودة' });
+      return fail(res, 422, 'VILLAGE_NOT_FOUND', 'القرية غير موجودة');
     }
+
+    // حقول البروفايل الاختيارية
+    const avatar = cleanUrl(req.body.avatar_url);
+    if (avatar === undefined)
+      return fail(res, 422, 'INVALID_AVATAR_URL', 'رابط الصورة غير صحيح (لازم يبدأ بـ http أو https)');
+    const email = cleanEmail(req.body.email);
+    if (email === undefined)
+      return fail(res, 422, 'INVALID_EMAIL', 'الإيميل غير صحيح');
+    const birth = cleanBirthDate(req.body.birth_date);
+    if (birth === undefined)
+      return fail(res, 422, 'INVALID_BIRTH_DATE', 'تاريخ الميلاد غير صحيح (الصيغة YYYY-MM-DD)');
+    const gender = cleanGender(req.body.gender);
+    if (gender === undefined)
+      return fail(res, 422, 'INVALID_GENDER', 'النوع لازم يكون male أو female');
+    const lang = cleanLang(req.body.preferred_language);
+    if (lang === undefined)
+      return fail(res, 422, 'INVALID_LANGUAGE', 'اللغة لازم تكون ar أو en');
 
     // هل الرقم مسجّل قبل كده؟
     const existing = await db.query(
@@ -58,32 +151,48 @@ router.post('/register', authLimiter, form, async (req, res, next) => {
       [p.e164]
     );
 
+    // الإيميل (لو اتبعت) لازم يكون غير مستخدم من حساب تاني
+    if (email) {
+      const dupe = await db.query('SELECT id FROM users WHERE email = $1', [email]);
+      if (dupe.rowCount && !(existing.rowCount && dupe.rows[0].id === existing.rows[0].id)) {
+        return fail(res, 409, 'EMAIL_TAKEN', 'الإيميل مستخدم بالفعل');
+      }
+    }
+
     let userId;
     if (existing.rowCount > 0) {
       if (existing.rows[0].phone_verified_at) {
-        return res.status(409).json({
-          success: false,
-          error: 'الرقم مسجّل بالفعل، من فضلك سجّل الدخول',
-        });
+        return fail(res, 409, 'ALREADY_REGISTERED', 'الرقم مسجّل بالفعل، من فضلك سجّل الدخول');
       }
       // حساب موجود لكنه لم يُفعّل: حدّث بياناته وأعد إرسال الكود
       userId = existing.rows[0].id;
       await db.query(
-        `UPDATE users SET full_name = $1, village_id = $2, updated_at = now() WHERE id = $3`,
-        [String(name).trim(), vid, userId]
+        `UPDATE users
+            SET full_name          = $1,
+                village_id         = $2,
+                avatar_url         = COALESCE($3, avatar_url),
+                email              = COALESCE($4, email),
+                birth_date         = COALESCE($5, birth_date),
+                gender             = COALESCE($6, gender),
+                preferred_language = COALESCE($7, preferred_language),
+                updated_at         = now()
+          WHERE id = $8`,
+        [String(name).trim(), vid, avatar, email, birth, gender, lang, userId]
       );
     } else {
       try {
         const ins = await db.query(
-          `INSERT INTO users (full_name, phone, village_id, role, status)
-           VALUES ($1, $2, $3, 'customer', 'pending_verification')
+          `INSERT INTO users
+             (full_name, phone, village_id, avatar_url, email, birth_date, gender,
+              preferred_language, role, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'ar'), 'customer', 'pending_verification')
            RETURNING id`,
-          [String(name).trim(), p.e164, vid]
+          [String(name).trim(), p.e164, vid, avatar, email, birth, gender, lang]
         );
         userId = ins.rows[0].id;
       } catch (e) {
         if (e.code === '23505') {
-          return res.status(409).json({ success: false, error: 'الرقم مسجّل بالفعل' });
+          return fail(res, 409, 'ALREADY_REGISTERED', 'الرقم مسجّل بالفعل');
         }
         throw e;
       }
@@ -104,22 +213,17 @@ router.post('/register', authLimiter, form, async (req, res, next) => {
 });
 
 /* ---------------------------------------------------------------------------
- * 2) تسجيل الدخول
- *    POST /api/auth/login
- *    body: { phone }
- *    الرد: { success, phone, next:"otp", dev_otp? }  -> حوّل المستخدم لشاشة OTP
+ * 2) تسجيل الدخول               POST /api/auth/login
+ *    body: phone
  * ------------------------------------------------------------------------- */
 router.post('/login', authLimiter, form, async (req, res, next) => {
   try {
     const p = normalizeEgyptPhone(req.body && req.body.phone);
-    if (!p.ok) return res.status(422).json({ success: false, error: p.error });
+    if (!p.ok) return fail(res, 422, 'INVALID_PHONE', p.error);
 
     const u = await db.query('SELECT id FROM users WHERE phone = $1', [p.e164]);
     if (u.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'لا يوجد حساب بهذا الرقم، أنشئ حساب جديد',
-      });
+      return fail(res, 404, 'ACCOUNT_NOT_FOUND', 'لا يوجد حساب بهذا الرقم، أنشئ حساب جديد');
     }
 
     const code = await issueOtp(u.rows[0].id, 'otp_login');
@@ -137,23 +241,28 @@ router.post('/login', authLimiter, form, async (req, res, next) => {
 });
 
 /* ---------------------------------------------------------------------------
- * 3) التحقق من كود OTP (لكل من التسجيل والدخول)
- *    POST /api/auth/verify-otp
- *    body: { phone, code }
+ * 3) التحقق من كود OTP           POST /api/auth/verify-otp
+ *    body: phone, code
  *    الرد عند النجاح: { success, token, user }
  * ------------------------------------------------------------------------- */
 router.post('/verify-otp', authLimiter, form, async (req, res, next) => {
   try {
     const { code } = req.body || {};
     const p = normalizeEgyptPhone(req.body && req.body.phone);
-    if (!p.ok) return res.status(422).json({ success: false, error: p.error });
+    if (!p.ok) return fail(res, 422, 'INVALID_PHONE', p.error);
     if (!/^\d{6}$/.test(String(code || ''))) {
-      return res.status(422).json({ success: false, error: 'الكود لازم يكون 6 أرقام' });
+      return fail(res, 422, 'INVALID_OTP_FORMAT', 'الكود لازم يكون 6 أرقام');
     }
 
-    const u = await db.query('SELECT * FROM users WHERE phone = $1', [p.e164]);
+    const u = await db.query(
+      `SELECT u.*, v.name AS village_name
+         FROM users u
+         LEFT JOIN villages v ON v.id = u.village_id
+        WHERE u.phone = $1`,
+      [p.e164]
+    );
     if (u.rowCount === 0) {
-      return res.status(404).json({ success: false, error: 'لا يوجد حساب بهذا الرقم' });
+      return fail(res, 404, 'ACCOUNT_NOT_FOUND', 'لا يوجد حساب بهذا الرقم');
     }
     const user = u.rows[0];
 
@@ -167,30 +276,30 @@ router.post('/verify-otp', authLimiter, form, async (req, res, next) => {
       [user.id]
     );
     if (t.rowCount === 0) {
-      return res.status(400).json({ success: false, error: 'اطلب كود جديد' });
+      return fail(res, 400, 'OTP_NOT_FOUND', 'اطلب كود جديد');
     }
     const token = t.rows[0];
 
     if (new Date(token.expires_at) < new Date()) {
       await db.query('UPDATE auth_tokens SET consumed_at = now() WHERE id = $1', [token.id]);
-      return res.status(400).json({ success: false, error: 'انتهت صلاحية الكود، اطلب كود جديد' });
+      return fail(res, 400, 'OTP_EXPIRED', 'انتهت صلاحية الكود، اطلب كود جديد');
     }
 
     const maxAttempts = Number(process.env.OTP_MAX_ATTEMPTS || 5);
     if (token.attempts >= maxAttempts) {
       await db.query('UPDATE auth_tokens SET consumed_at = now() WHERE id = $1', [token.id]);
-      return res.status(429).json({ success: false, error: 'حاولت كثيرًا، اطلب كود جديد' });
+      return fail(res, 429, 'OTP_TOO_MANY_ATTEMPTS', 'حاولت كثيرًا، اطلب كود جديد');
     }
 
-    const bcrypt = require('bcryptjs');
     const ok = await bcrypt.compare(String(code), token.token_hash);
     if (!ok) {
       await db.query('UPDATE auth_tokens SET attempts = attempts + 1 WHERE id = $1', [token.id]);
-      const left = maxAttempts - (token.attempts + 1);
-      return res.status(401).json({
-        success: false,
-        error: left > 0 ? `الكود غير صحيح (باقي ${left} محاولات)` : 'الكود غير صحيح',
-      });
+      const left = Math.max(0, maxAttempts - (token.attempts + 1));
+      return fail(
+        res, 401, 'OTP_WRONG',
+        left > 0 ? `الكود غير صحيح (باقي ${left} محاولات)` : 'الكود غير صحيح',
+        { attempts_left: left }
+      );
     }
 
     // نجاح: استهلك الكود وفعّل الحساب
@@ -212,8 +321,17 @@ router.post('/verify-otp', authLimiter, form, async (req, res, next) => {
         id: user.id,
         name: user.full_name,
         phone: user.phone,
+        email: user.email,
+        avatar_url: user.avatar_url,
+        birth_date: user.birth_date
+          ? new Date(user.birth_date).toISOString().slice(0, 10)
+          : null,
+        gender: user.gender,
+        preferred_language: user.preferred_language,
         village_id: user.village_id,
+        village_name: user.village_name,
         status: 'active',
+        created_at: user.created_at,
         is_new: !user.phone_verified_at,
       },
     });
@@ -223,21 +341,20 @@ router.post('/verify-otp', authLimiter, form, async (req, res, next) => {
 });
 
 /* ---------------------------------------------------------------------------
- * 4) إعادة إرسال الكود
- *    POST /api/auth/resend-otp
- *    body: { phone }
+ * 4) إعادة إرسال الكود           POST /api/auth/resend-otp
+ *    body: phone
  * ------------------------------------------------------------------------- */
 router.post('/resend-otp', authLimiter, form, async (req, res, next) => {
   try {
     const p = normalizeEgyptPhone(req.body && req.body.phone);
-    if (!p.ok) return res.status(422).json({ success: false, error: p.error });
+    if (!p.ok) return fail(res, 422, 'INVALID_PHONE', p.error);
 
     const u = await db.query(
       'SELECT id, phone_verified_at FROM users WHERE phone = $1',
       [p.e164]
     );
     if (u.rowCount === 0) {
-      return res.status(404).json({ success: false, error: 'لا يوجد حساب بهذا الرقم' });
+      return fail(res, 404, 'ACCOUNT_NOT_FOUND', 'لا يوجد حساب بهذا الرقم');
     }
 
     const purpose = u.rows[0].phone_verified_at ? 'otp_login' : 'phone_verify';
@@ -253,23 +370,105 @@ router.post('/resend-otp', authLimiter, form, async (req, res, next) => {
 });
 
 /* ---------------------------------------------------------------------------
- * 5) بيانات المستخدم الحالي (مسار محمي - للتأكد أن التوكن يعمل)
- *    GET /api/auth/me   header: Authorization: Bearer <token>
+ * 5) بيانات المستخدم الحالي      GET /api/auth/me   (محمي)
+ *    يرجّع البروفايل كامل: الاسم، الصورة، الإيميل، القرية، تاريخ إنشاء الحساب...
  * ------------------------------------------------------------------------- */
 router.get('/me', authRequired, async (req, res, next) => {
   try {
-    const { rows } = await db.query(
-      `SELECT u.id, u.full_name AS name, u.phone, u.status, u.village_id,
-              v.name AS village_name, u.created_at
-         FROM users u
-    LEFT JOIN villages v ON v.id = u.village_id
-        WHERE u.id = $1`,
-      [req.user.sub]
-    );
+    const { rows } = await db.query(PROFILE_SELECT, [req.user.sub]);
     if (rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
+      return fail(res, 404, 'USER_NOT_FOUND', 'المستخدم غير موجود');
     }
-    res.json({ success: true, user: rows[0] });
+    res.json({ success: true, user: shapeUser(rows[0]) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ---------------------------------------------------------------------------
+ * 6) تعديل البروفايل             PATCH /api/auth/me   (محمي)
+ *    body (كل الحقول اختيارية): name, avatar_url, email, birth_date, gender,
+ *                               village_id, preferred_language
+ * ------------------------------------------------------------------------- */
+router.patch('/me', authRequired, form, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const sets = [];
+    const vals = [];
+    const add = (col, val) => {
+      vals.push(val);
+      sets.push(`${col} = $${vals.length}`);
+    };
+
+    if (b.name !== undefined) {
+      if (String(b.name).trim().length < 2) {
+        return fail(res, 422, 'NAME_REQUIRED', 'الاسم قصير');
+      }
+      add('full_name', String(b.name).trim());
+    }
+
+    if (b.avatar_url !== undefined) {
+      const a = cleanUrl(b.avatar_url);
+      if (a === undefined) return fail(res, 422, 'INVALID_AVATAR_URL', 'رابط الصورة غير صحيح');
+      add('avatar_url', a);
+    }
+
+    if (b.email !== undefined) {
+      const e = cleanEmail(b.email);
+      if (e === undefined) return fail(res, 422, 'INVALID_EMAIL', 'الإيميل غير صحيح');
+      if (e) {
+        const dupe = await db.query(
+          'SELECT 1 FROM users WHERE email = $1 AND id <> $2',
+          [e, req.user.sub]
+        );
+        if (dupe.rowCount) return fail(res, 409, 'EMAIL_TAKEN', 'الإيميل مستخدم بالفعل');
+      }
+      add('email', e);
+    }
+
+    if (b.birth_date !== undefined) {
+      const d = cleanBirthDate(b.birth_date);
+      if (d === undefined) return fail(res, 422, 'INVALID_BIRTH_DATE', 'تاريخ الميلاد غير صحيح (YYYY-MM-DD)');
+      add('birth_date', d);
+    }
+
+    if (b.gender !== undefined) {
+      const g = cleanGender(b.gender);
+      if (g === undefined) return fail(res, 422, 'INVALID_GENDER', 'النوع لازم يكون male أو female');
+      add('gender', g);
+    }
+
+    if (b.village_id !== undefined) {
+      const vid = Number(b.village_id);
+      if (!Number.isInteger(vid) || vid <= 0) {
+        return fail(res, 422, 'VILLAGE_NOT_FOUND', 'قرية غير صحيحة');
+      }
+      const ok = await db.query(
+        'SELECT 1 FROM villages WHERE id = $1 AND is_active = true',
+        [vid]
+      );
+      if (!ok.rowCount) return fail(res, 422, 'VILLAGE_NOT_FOUND', 'القرية غير موجودة');
+      add('village_id', vid);
+    }
+
+    if (b.preferred_language !== undefined) {
+      const lang = cleanLang(b.preferred_language);
+      if (lang === undefined) return fail(res, 422, 'INVALID_LANGUAGE', 'اللغة لازم تكون ar أو en');
+      add('preferred_language', lang);
+    }
+
+    if (sets.length === 0) {
+      return fail(res, 422, 'NOTHING_TO_UPDATE', 'مفيش بيانات للتعديل');
+    }
+
+    vals.push(req.user.sub);
+    await db.query(
+      `UPDATE users SET ${sets.join(', ')}, updated_at = now() WHERE id = $${vals.length}`,
+      vals
+    );
+
+    const { rows } = await db.query(PROFILE_SELECT, [req.user.sub]);
+    res.json({ success: true, user: shapeUser(rows[0]) });
   } catch (err) {
     next(err);
   }
