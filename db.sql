@@ -487,3 +487,32 @@ INSERT INTO drivers (id, staff_user_id, name, phone, vehicle_type, status, is_on
 ON CONFLICT (id) DO NOTHING;
 
 UPDATE staff_users SET driver_id = 'drv_1' WHERE id = 'd0000000-0000-4000-8000-000000000001' AND driver_id IS NULL;
+
+-- ============================================================================
+--  بانرات الهوم + طلبات سريعة (Admin/Home)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS banners (
+    id          SERIAL PRIMARY KEY,
+    title_ar    VARCHAR(150),
+    title_en    VARCHAR(150),
+    image       TEXT NOT NULL,
+    target_type VARCHAR(20),    -- vendor | category | url
+    target_ref  TEXT,
+    sort_order  SMALLINT NOT NULL DEFAULT 0,
+    is_active   BOOLEAN NOT NULL DEFAULT true,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS quick_orders (
+    id           VARCHAR(30) PRIMARY KEY,
+    customer_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    details      TEXT NOT NULL,
+    price        NUMERIC(10,2),
+    images       JSONB NOT NULL DEFAULT '[]',
+    status       VARCHAR(20) NOT NULL DEFAULT 'pending',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_quick_orders_customer ON quick_orders(customer_id, created_at DESC);
+CREATE SEQUENCE IF NOT EXISTS quick_order_seq START 1;
+
+ALTER TABLE categories ADD COLUMN IF NOT EXISTS image TEXT;

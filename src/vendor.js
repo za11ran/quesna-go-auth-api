@@ -12,6 +12,7 @@ const { signStaffToken, staffAuth } = require('./staff-auth');
 const { submitChangeRequest, vendorFieldsNeedApproval, productFieldsNeedApproval } = require('./changeRequests');
 const { loadOrder, serializeOrder, setStatus } = require('./orderView');
 const { notify } = require('./notify');
+const { emitTo } = require('./realtime');
 const { imageUpload, saveImage } = require('./upload');
 
 const nowIso = () => new Date().toISOString();
@@ -518,7 +519,8 @@ router.patch('/orders/:id/status', vendorRole, async (req, res, next) => {
       await notify(bundle.order.customer_id, { title: 'اعتذر المتجر عن طلبك', body: reason || 'تم رفض الطلب', type: 'order_rejected', orderId: req.params.id });
     } else if (to === 'ready_for_pickup') {
       await setStatus(req.params.id, 'ready_for_pickup', 'vendor');
-      // TODO: إشعار realtime للمشرف (dispatch_needs_assignment)
+      emitTo('role:dispatcher', 'dispatch:needs_assignment', { order_id: req.params.id });
+      emitTo('role:admin', 'dispatch:needs_assignment', { order_id: req.params.id });
     } else {
       await setStatus(req.params.id, to, 'vendor');
     }

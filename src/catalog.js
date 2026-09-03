@@ -282,6 +282,27 @@ router.get('/home/categories', async (req, res, next) => {
   }
 });
 
+/* ---------------- GET /api/home/banners ---------------- */
+router.get('/home/banners', async (req, res, next) => {
+  try {
+    const lang = langOf(req);
+    const { rows } = await db.query(
+      `SELECT * FROM banners WHERE is_active = true ORDER BY sort_order, id`
+    );
+    res.json({
+      data: rows.map((x) => ({
+        id: x.id,
+        title: x[`title_${lang}`] || x.title_ar || null,
+        image: x.image,
+        target_type: x.target_type || null,
+        target_ref: x.target_ref || null,
+      })),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
 /* ---------------- GET /api/products/most-requested ---------------- */
 router.get('/products/most-requested', async (req, res, next) => {
   try {

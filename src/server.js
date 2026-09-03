@@ -39,8 +39,13 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, error_code: 'SERVER_ERROR', error: 'خطأ في السيرفر' });
 });
 
+const http = require('http');
+const server = http.createServer(app);
+require('./realtime').initRealtime(server);   // Socket.IO
+require('./worker').start();                  // عامل مهلة عروض التوصيل
+
 const port = process.env.PORT || 4000;
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`\n✅ الـ API شغّال على: http://localhost:${port}`);
   console.log(`   وضع التشغيل: ${process.env.NODE_ENV || 'development'}\n`);
 });

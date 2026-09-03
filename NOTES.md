@@ -31,18 +31,20 @@
 
 حسابات تجريبية: `admin@quesnago.com/admin1234` · `owner@metro.test/metro1234` · `dispatch1@quesnago.com/disp1234` · driver: phone `+201000000030` / `driver1234`.
 
-## الباقي
-1. **Vendor** تكميلي: الموظفين (`/vendor/staff`)، bulk-price.
-2. **Admin** تكميلي: أقسام الهوم CRUD، البانرات CRUD، حسابات الدليفري/المشرفين CRUD، تقارير.
-3. **Realtime** (Socket.IO): `vendor_new_order` · `dispatch_needs_assignment` · `driver_new_assignment` + تتبّع `driver.location` أثناء `on_the_way`. Push عبر `user_devices`.
-4. مهلة رفض عرض التوصيل (`delivery_offers.expires_at`) → auto reassign للي بعده (worker/cron).
-5. **الداش بورد** (React، RTL، دخول بالدور).
-6. openapi.yaml للمسارات الجديدة — لسه على auth بس.
-7. `/orders/quick` (multipart) — لسه.
+## ✅ منطق الـ API مكتمل (كل الأدوار + Realtime + العامل الخلفي)
 
-## تم مؤخرًا (فوق المذكور)
-- **رفع الصور**: `src/upload.js` (multer memory + sharp → webp، حد 5MB، jpg/png/webp)، يتقدّم من `/uploads` (Nginx مباشرة على السيرفر). لوجو/غلاف المتجر + صورة المنتج → **Change Request** (تظهر بعد موافقة الأدمن).
-- **Vendor**: `PUT /vendor/profile/working-hours` (فوري)، **عروض CRUD** (`GET/POST/PUT/DELETE /vendor/offers`) كلها Change Request. `applyChangeRequest` بقى يدعم `entity_type='offer'`.
+**الباقي غير المنطقي:**
+1. **الداش بورد** (React، RTL، دخول بالدور) — أكبر جزء متبقّي.
+2. النشر على الـ VPS (السكربتات جاهزة) + Cloudinary اختياري + Resend.
+3. `openapi.yaml` — لسه على auth بس؛ محتاج تحديث لكل المسارات.
+4. تكميلي صغير: `/vendor/staff` CRUD، bulk-price، push فعلي عبر `user_devices` (FCM/OneSignal)، تقارير أعمق.
+
+## تم مؤخرًا
+- **رفع الصور**: `src/upload.js` (multer memory + sharp → webp، 5MB، jpg/png/webp) → `/uploads` (Nginx مباشرة). لوجو/غلاف/صورة منتج → **Change Request**. `/api/admin/categories|banners|... /image` و `/api/orders/quick` (multipart، حتى 5 صور).
+- **Vendor**: `PUT /vendor/profile/working-hours` (فوري)، **عروض CRUD** كلها Change Request؛ `applyChangeRequest` يدعم `entity_type='offer'`.
+- **Admin**: أقسام الهوم CRUD، البانرات CRUD، **إنشاء متجر + حساب صاحبه**، **حسابات دليفري/مشرفين**، `/admin/orders` `/admin/users` `/admin/reports`. + `GET /api/home/banners` للعميل.
+- **Realtime** (`src/realtime.js`, Socket.IO على `/socket.io`، JWT في `handshake.auth.token`): غرف `customer:<id>` `staff:<id>` `vendor:<id>` `driver:<id>` `role:<role>`. أحداث: `notification:new` (كل إشعار)، `order:new` (للتاجر)، `order:update` (للعميل مع كل تغيّر حالة)، `dispatch:needs_assignment` (للمشرف)، `driver:assignment` (للدليفري). Nginx بيمرّر WebSocket.
+- **العامل الخلفي** (`src/worker.js`): كل 20 ثانية يلغي عروض التوصيل اللي عدّت المهلة، يحرّر الدليفري، يرجّع الطلب `ready_for_pickup`، ويبثّ `dispatch:needs_assignment`. يتعطّل بـ `DISABLE_WORKER=1`.
 
 ## اختبار محلي
 `pg-mem` غير مثبت كـ dependency — تُستخدم مؤقتًا في سكربتات الاختبار.

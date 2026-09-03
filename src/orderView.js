@@ -1,5 +1,6 @@
 // تحميل وتسلسل الطلب — مشترك بين العميل/التاجر/المشرف/الدليفري.
 const db = require('./db');
+const { emitTo } = require('./realtime');
 
 const n2 = (v) => (v === null || v === undefined ? v : Math.round(Number(v) * 100) / 100);
 
@@ -90,6 +91,10 @@ async function setStatus(orderId, status, byRole, extraCols = {}) {
   }
   await db.query(`UPDATE orders SET ${cols.join(', ')} WHERE id = $1`, params);
   await db.query(`INSERT INTO order_status_history (order_id, status, by_role) VALUES ($1, $2, $3)`, [orderId, status, byRole]);
+  try {
+    const c = await db.query(`SELECT customer_id FROM orders WHERE id = $1`, [orderId]);
+    if (c.rows[0]) emitTo(`customer:${c.rows[0].customer_id}`, 'order:update', { order_id: orderId, status });
+  } catch { /* بثّ فقط */ }
 }
 
 module.exports = { loadOrder, serializeOrder, serializeDriver, setStatus, n2 };

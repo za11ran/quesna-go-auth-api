@@ -11,7 +11,9 @@ const router = require('express').Router();
 const db = require('./db');
 const { authRequired } = require('./auth');
 const { notify } = require('./notify');
+const { emitTo } = require('./realtime');
 const { loadOrder, serializeOrder, n2 } = require('./orderView');
+const { imagesUpload, saveImages } = require('./upload');
 
 const langOf = (req) =>
   String(req.get('LANG') || 'ar').toLowerCase().startsWith('en') ? 'en' : 'ar';
@@ -212,7 +214,8 @@ router.post('/orders', authRequired, async (req, res, next) => {
 
     const m = msg('order_placed', lang, orderId);
     await notify(req.user.sub, { ...m, type: 'order_placed', orderId });
-    // TODO: إشعار realtime للتاجر (مرحلة Vendor API)
+    // إشعار لحظي للتجّار المعنيين + المشرفين
+    for (const vid of Object.keys(vendorAgg)) emitTo(`vendor:${vid}`, 'order:new', { order_id: orderId });
 
     const bundle = await loadOrder(orderId);
     res.status(201).json(serializeOrder(bundle));
@@ -221,6 +224,29 @@ router.post('/orders', authRequired, async (req, res, next) => {
     next(err);
   } finally {
     client.release();
+  }
+});
+
+/* ============================ POST /api/orders/quick ============================ */
+// طلب سريع: نص + سعر تقديري + صور (multipart، حقل images، أقصى 5)
+router.post('/orders/quick', authRequired, imagesUpload, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    if (!b.details || String(b.details).trim().length < 3) {
+      return fail(res, 422, 'DETAILS_REQUIRED', 'تفاصيل الطلب مطلوبة');
+    }
+    const urls = await saveImages(req.files, { folder: 'quick', width: 1200 });
+    const seq = await db.query(`SELECT nextval('quick_order_seq') AS n`);
+    const id = `qo_${seq.rows[0].n}`;
+    await db.query(
+      `INSERT INTO quick_orders (id, customer_id, details, price, images)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [id, req.user.sub, String(b.details).trim(), b.price != null ? Number(b.price) : null, JSON.stringify(urls)]
+    );
+    await notify(req.user.sub, { title: 'استلمنا طلبك السريع', body: `رقم ${id} — هنتواصل معاك`, type: 'order_placed', orderId: id });
+    res.status(201).json({ success: true, id, images: urls });
+  } catch (e) {
+    next(e);
   }
 });
 

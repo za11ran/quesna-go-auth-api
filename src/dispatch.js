@@ -10,6 +10,7 @@ const db = require('./db');
 const { staffAuth } = require('./staff-auth');
 const { loadOrder, serializeOrder, setStatus } = require('./orderView');
 const { notify } = require('./notify');
+const { emitTo } = require('./realtime');
 
 const nowIso = () => new Date().toISOString();
 const fail = (res, s, code, message) =>
@@ -62,6 +63,7 @@ async function assignToDriver(orderId, driver, dispatcherId, { reassign = false 
       title: 'تعيين توصيل جديد', body: `طلب ${orderId}`, type: 'order_assigned', orderId, recipientType: 'staff',
     });
   }
+  emitTo(`driver:${driver.id}`, 'driver:assignment', { order_id: orderId });
 }
 
 /* -------- orders queue -------- */
