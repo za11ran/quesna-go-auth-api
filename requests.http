@@ -6,16 +6,15 @@
 ### 1) قائمة القرى (للـ dropdown في شاشة التسجيل)
 GET {{baseUrl}}/api/villages
 
-### 2) إنشاء حساب جديد  (الاسم + الفون + القرية + اللغة اختياري)
+### 2) إنشاء حساب جديد  (body: الاسم + الفون + القرية / query: lang اختياري)
 # الرد هيرجّع dev_otp في وضع التطوير - انسخه للطلب رقم 3
-POST {{baseUrl}}/api/auth/register
+POST {{baseUrl}}/api/auth/register?lang=ar
 Content-Type: application/json
 
 {
   "name": "أحمد محمد",
   "phone": "01065465118",
-  "village_id": 1,
-  "preferred_language": "ar"
+  "village_id": 1
 }
 
 ### 3) تأكيد كود الـ OTP بعد التسجيل

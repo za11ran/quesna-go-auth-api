@@ -57,10 +57,16 @@ paths:
       operationId: register
       summary: Register
       description: >
-        Create an account and send an OTP code. Body is form-data.
-        Fields: name, phone, village_id (required) + preferred_language (optional,
-        ar|en, default ar - the app sends its current UI language automatically).
-        Photo, email, birth_date and gender are added later via PATCH /api/auth/me.
+        Create an account and send an OTP code. Body is form-data (name, phone,
+        village_id). The UI language is passed as the query parameter ?lang=ar|en
+        (optional, default ar). Photo, email, birth_date and gender are added
+        later via PATCH /api/auth/me.
+      parameters:
+        - in: query
+          name: lang
+          required: false
+          schema: { type: string, enum: [ar, en], default: ar }
+          description: "لغة واجهة التطبيق الحالية"
       requestBody:
         required: true
         content:
@@ -69,7 +75,6 @@ paths:
               name: "أحمد محمد"
               phone: "01065465118"
               village_id: 1
-              preferred_language: "ar"
             schema:
               type: object
               required: [name, phone, village_id]
@@ -79,10 +84,6 @@ paths:
                   type: string
                   description: Egyptian mobile. Accepts 01065465118, 1065465118 or +201065465118
                 village_id: { type: integer }
-                preferred_language:
-                  type: string
-                  enum: [ar, en]
-                  description: "لغة التطبيق الحالية (اختياري، الافتراضي ar)"
       responses:
         '201':
           description: Account created, OTP sent
@@ -186,7 +187,7 @@ paths:
                   avatar_url: "https://i.pravatar.cc/150?img=12"
                   birth_date: "1998-04-25"
                   gender: "male"
-                  preferred_language: "ar"
+                  lang: "ar"
                   village_id: 1
                   village_name: "كفر داود"
                   status: "active"
@@ -268,7 +269,7 @@ paths:
                   avatar_url: "https://i.pravatar.cc/150?img=12"
                   birth_date: "1998-04-25"
                   gender: "male"
-                  preferred_language: "ar"
+                  lang: "ar"
                   village_id: 1
                   village_name: "كفر داود"
                   status: "active"
@@ -305,7 +306,7 @@ paths:
               birth_date: "1998-04-25"
               gender: "male"
               village_id: 2
-              preferred_language: "en"
+              lang: "en"
             schema:
               type: object
               properties:
@@ -315,7 +316,7 @@ paths:
                 birth_date: { type: string, example: "1998-04-25" }
                 gender: { type: string, enum: [male, female] }
                 village_id: { type: integer }
-                preferred_language: { type: string, enum: [ar, en] }
+                lang: { type: string, enum: [ar, en] }
       responses:
         '200':
           description: Updated, returns the full profile
@@ -371,7 +372,7 @@ components:
         avatar_url: { type: string, nullable: true }
         birth_date: { type: string, nullable: true, example: "1998-04-25" }
         gender: { type: string, nullable: true, enum: [male, female, null] }
-        preferred_language: { type: string, enum: [ar, en] }
+        lang: { type: string, enum: [ar, en] }
         village_id: { type: integer, nullable: true }
         village_name: { type: string, nullable: true }
         status: { type: string }

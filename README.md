@@ -141,12 +141,12 @@ Authorization: Bearer <التوكن اللي رجع من verify-otp>
 | الطريقة | المسار | الجسم (body) | الوظيفة |
 |--------|--------|--------------|---------|
 | `GET`   | `/api/villages` | — | قائمة القرى للـ dropdown |
-| `POST`  | `/api/auth/register` | `name, phone, village_id` + `preferred_language` اختياري (`ar`/`en`) | إنشاء حساب + إرسال OTP |
+| `POST`  | `/api/auth/register?lang=ar` | body: `name, phone, village_id` — query: `lang` اختياري (`ar`/`en`) | إنشاء حساب + إرسال OTP |
 | `POST`  | `/api/auth/login` | `phone` | إرسال OTP للدخول |
 | `POST`  | `/api/auth/verify-otp` | `phone, code` | تأكيد الكود + إرجاع `token` + البروفايل |
 | `POST`  | `/api/auth/resend-otp` | `phone` | إعادة إرسال الكود |
 | `GET`   | `/api/auth/me` | — (هيدر Authorization) | البروفايل كامل (الاسم، الصورة، القرية، `created_at` ...) |
-| `PATCH` | `/api/auth/me` | أي من: `name, avatar_url, email, birth_date, gender, village_id, preferred_language` | تعديل البروفايل |
+| `PATCH` | `/api/auth/me` | أي من: `name, avatar_url, email, birth_date, gender, village_id, lang` | تعديل البروفايل |
 
 الجسم يُقبل كـ **form-data** أو **JSON**.
 
@@ -154,8 +154,8 @@ Authorization: Bearer <التوكن اللي رجع من verify-otp>
 التطبيق العربي/الإنجليزي يترجم `error_code` عنده. القائمة الكاملة في
 [`ERROR_CODES.md`](./ERROR_CODES.md).
 
-**اللغة:** `preferred_language` (`ar`/`en`) بتتخزن في البروفايل وبتترجع في `user`،
-وتقدر تغيّرها بـ `PATCH /api/auth/me`.
+**اللغة:** بتتبعت كـ query `?lang=ar` عند التسجيل، وبتترجع في `user.lang`،
+وتقدر تغيّرها بـ `PATCH /api/auth/me` (حقل `lang`).
 
 ---
 

@@ -77,7 +77,7 @@ const PROFILE_SELECT = `
          u.avatar_url,
          u.birth_date,
          u.gender,
-         u.preferred_language,
+         u.preferred_language AS lang,
          u.status,
          u.village_id,
          v.name             AS village_name,
@@ -100,9 +100,9 @@ function shapeUser(row) {
 }
 
 /* ---------------------------------------------------------------------------
- * 1) إنشاء حساب جديد            POST /api/auth/register
- *    body: name, phone, village_id  (+ اختياري: avatar_url, email, birth_date,
- *                                    gender, preferred_language)
+ * 1) إنشاء حساب جديد            POST /api/auth/register?lang=ar
+ *    body: name, phone, village_id
+ *    query: lang (اختياري: ar|en، الافتراضي ar) - لغة واجهة التطبيق
  *    الرد: { success, phone, next:"otp", dev_otp? }  -> شاشة الـ OTP
  * ------------------------------------------------------------------------- */
 router.post('/register', authLimiter, form, async (req, res, next) => {
@@ -128,10 +128,13 @@ router.post('/register', authLimiter, form, async (req, res, next) => {
       return fail(res, 422, 'VILLAGE_NOT_FOUND', 'القرية غير موجودة');
     }
 
-    // اللغة: باراميتر اختياري يبعته التطبيق تلقائيًا (لغة الواجهة الحالية). الافتراضي 'ar'.
-    const lang = cleanLang(req.body.preferred_language);
+    // اللغة: query parameter اختياري (?lang=ar) يبعته التطبيق تلقائيًا
+    // (لغة الواجهة الحالية). الافتراضي 'ar'. مقبول في الـ body كمان كـ fallback.
+    const lang = cleanLang(
+      req.query.lang !== undefined ? req.query.lang : req.body.lang
+    );
     if (lang === undefined) {
-      return fail(res, 422, 'INVALID_LANGUAGE', 'اللغة لازم تكون ar أو en');
+      return fail(res, 422, 'INVALID_LANGUAGE', 'lang لازم يكون ar أو en');
     }
 
     // باقي بيانات البروفايل (الصورة، الإيميل، تاريخ الميلاد، النوع) بتتضاف لاحقًا
@@ -304,7 +307,7 @@ router.post('/verify-otp', authLimiter, form, async (req, res, next) => {
           ? new Date(user.birth_date).toISOString().slice(0, 10)
           : null,
         gender: user.gender,
-        preferred_language: user.preferred_language,
+        lang: user.preferred_language,
         village_id: user.village_id,
         village_name: user.village_name,
         status: 'active',
@@ -365,7 +368,7 @@ router.get('/me', authRequired, async (req, res, next) => {
 /* ---------------------------------------------------------------------------
  * 6) تعديل البروفايل             PATCH /api/auth/me   (محمي)
  *    body (كل الحقول اختيارية): name, avatar_url, email, birth_date, gender,
- *                               village_id, preferred_language
+ *                               village_id, lang (ar|en)
  * ------------------------------------------------------------------------- */
 router.patch('/me', authRequired, form, async (req, res, next) => {
   try {
@@ -428,9 +431,11 @@ router.patch('/me', authRequired, form, async (req, res, next) => {
       add('village_id', vid);
     }
 
-    if (b.preferred_language !== undefined) {
-      const lang = cleanLang(b.preferred_language);
-      if (lang === undefined) return fail(res, 422, 'INVALID_LANGUAGE', 'اللغة لازم تكون ar أو en');
+    // اللغة: من body.lang أو query ?lang=
+    const langInput = b.lang !== undefined ? b.lang : req.query.lang;
+    if (langInput !== undefined) {
+      const lang = cleanLang(langInput);
+      if (lang === undefined) return fail(res, 422, 'INVALID_LANGUAGE', 'lang لازم يكون ar أو en');
       add('preferred_language', lang);
     }
 
