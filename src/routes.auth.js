@@ -128,8 +128,13 @@ router.post('/register', authLimiter, form, async (req, res, next) => {
       return fail(res, 422, 'VILLAGE_NOT_FOUND', 'القرية غير موجودة');
     }
 
-    // التسجيل يطلب 3 حقول بس: الاسم + رقم الموبايل + القرية.
-    // باقي بيانات البروفايل (الصورة، الإيميل، تاريخ الميلاد...) بتتضاف لاحقًا
+    // اللغة: باراميتر اختياري يبعته التطبيق تلقائيًا (لغة الواجهة الحالية). الافتراضي 'ar'.
+    const lang = cleanLang(req.body.preferred_language);
+    if (lang === undefined) {
+      return fail(res, 422, 'INVALID_LANGUAGE', 'اللغة لازم تكون ar أو en');
+    }
+
+    // باقي بيانات البروفايل (الصورة، الإيميل، تاريخ الميلاد، النوع) بتتضاف لاحقًا
     // من شاشة البروفايل عبر PATCH /api/auth/me.
 
     // هل الرقم مسجّل قبل كده؟
@@ -143,19 +148,23 @@ router.post('/register', authLimiter, form, async (req, res, next) => {
       if (existing.rows[0].phone_verified_at) {
         return fail(res, 409, 'ALREADY_REGISTERED', 'الرقم مسجّل بالفعل، من فضلك سجّل الدخول');
       }
-      // حساب موجود لكنه لم يُفعّل: حدّث الاسم والقرية وأعد إرسال الكود
+      // حساب موجود لكنه لم يُفعّل: حدّث الاسم والقرية واللغة وأعد إرسال الكود
       userId = existing.rows[0].id;
       await db.query(
-        `UPDATE users SET full_name = $1, village_id = $2, updated_at = now() WHERE id = $3`,
-        [String(name).trim(), vid, userId]
+        `UPDATE users
+            SET full_name = $1, village_id = $2,
+                preferred_language = COALESCE($3, preferred_language),
+                updated_at = now()
+          WHERE id = $4`,
+        [String(name).trim(), vid, lang, userId]
       );
     } else {
       try {
         const ins = await db.query(
-          `INSERT INTO users (full_name, phone, village_id, role, status)
-           VALUES ($1, $2, $3, 'customer', 'pending_verification')
+          `INSERT INTO users (full_name, phone, village_id, preferred_language, role, status)
+           VALUES ($1, $2, $3, COALESCE($4, 'ar'), 'customer', 'pending_verification')
            RETURNING id`,
-          [String(name).trim(), p.e164, vid]
+          [String(name).trim(), p.e164, vid, lang]
         );
         userId = ins.rows[0].id;
       } catch (e) {

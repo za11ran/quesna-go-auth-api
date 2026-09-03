@@ -58,9 +58,9 @@ paths:
       summary: Register
       description: >
         Create an account and send an OTP code. Body is form-data.
-        Only 3 fields: name, phone, village_id.
-        Profile details (photo, email, birth_date, gender, language) are added
-        later from the profile screen via PATCH /api/auth/me.
+        Fields: name, phone, village_id (required) + preferred_language (optional,
+        ar|en, default ar - the app sends its current UI language automatically).
+        Photo, email, birth_date and gender are added later via PATCH /api/auth/me.
       requestBody:
         required: true
         content:
@@ -69,6 +69,7 @@ paths:
               name: "أحمد محمد"
               phone: "01065465118"
               village_id: 1
+              preferred_language: "ar"
             schema:
               type: object
               required: [name, phone, village_id]
@@ -78,6 +79,10 @@ paths:
                   type: string
                   description: Egyptian mobile. Accepts 01065465118, 1065465118 or +201065465118
                 village_id: { type: integer }
+                preferred_language:
+                  type: string
+                  enum: [ar, en]
+                  description: "لغة التطبيق الحالية (اختياري، الافتراضي ar)"
       responses:
         '201':
           description: Account created, OTP sent
