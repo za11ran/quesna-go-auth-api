@@ -10,6 +10,8 @@ const bcrypt = require('bcryptjs');
 const db = require('./db');
 const { signStaffToken, staffAuth } = require('./staff-auth');
 const { submitChangeRequest, vendorFieldsNeedApproval, productFieldsNeedApproval } = require('./changeRequests');
+const { loadOrder, serializeOrder, setStatus } = require('./orderView');
+const { notify } = require('./notify');
 
 const nowIso = () => new Date().toISOString();
 const fail = (res, s, code, message) =>
@@ -303,6 +305,94 @@ router.post('/change-requests/:id/cancel', vendorRole, async (req, res, next) =>
   } catch (e) {
     next(e);
   }
+});
+
+/* -------- vendor orders (§8.5) -------- */
+async function ownsOrder(orderId, vendorId) {
+  const r = await db.query(`SELECT 1 FROM order_vendors WHERE order_id = $1 AND vendor_id = $2`, [orderId, vendorId]);
+  return r.rowCount > 0;
+}
+
+router.get('/orders', vendorRole, async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const perPage = Math.min(50, Math.max(1, parseInt(req.query.per_page, 10) || 20));
+    const where = ['ov.vendor_id = $1'];
+    const params = [req.staff.vendor_id];
+    if (req.query.status) { params.push(String(req.query.status)); where.push(`o.status = $${params.length}`); }
+    const whereSql = `WHERE ${where.join(' AND ')}`;
+    const total = (await db.query(`SELECT count(*)::int c FROM orders o JOIN order_vendors ov ON ov.order_id = o.id ${whereSql}`, params)).rows[0].c;
+    params.push(perPage, (page - 1) * perPage);
+    const { rows } = await db.query(
+      `SELECT o.id FROM orders o JOIN order_vendors ov ON ov.order_id = o.id ${whereSql}
+       ORDER BY o.placed_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+    const data = [];
+    for (const r of rows) data.push(serializeOrder(await loadOrder(r.id)));
+    res.json({ data, meta: { page, per_page: perPage, total, last_page: Math.max(1, Math.ceil(total / perPage)) } });
+  } catch (e) { next(e); }
+});
+
+router.get('/orders/:id', vendorRole, async (req, res, next) => {
+  try {
+    if (!(await ownsOrder(req.params.id, req.staff.vendor_id))) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+    const b = await loadOrder(req.params.id);
+    res.json(serializeOrder(b));
+  } catch (e) { next(e); }
+});
+
+const VENDOR_FLOW = {
+  pending: ['accepted', 'rejected'],
+  accepted: ['preparing', 'rejected'],
+  preparing: ['ready_for_pickup'],
+};
+
+router.patch('/orders/:id/status', vendorRole, async (req, res, next) => {
+  try {
+    if (!(await ownsOrder(req.params.id, req.staff.vendor_id))) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+    const bundle = await loadOrder(req.params.id);
+    const from = bundle.order.status;
+    const to = String((req.body || {}).status || '');
+    if (!(VENDOR_FLOW[from] || []).includes(to)) {
+      return fail(res, 409, 'INVALID_TRANSITION', `لا يمكن الانتقال من ${from} إلى ${to}`);
+    }
+
+    if (to === 'accepted') {
+      // خصم المخزون مرة واحدة
+      if (!bundle.order.stock_deducted) {
+        for (const it of bundle.items) {
+          const qty = Number(it.quantity);
+          if (it.option_id) {
+            await db.query(
+              `UPDATE product_options SET stock = stock - $3::int
+                 WHERE product_id = $1 AND id = $2 AND stock IS NOT NULL AND stock >= $3::int`,
+              [it.product_id, it.option_id, qty]
+            );
+          }
+          await db.query(
+            `UPDATE products SET stock = stock - $2::int
+               WHERE id = $1 AND stock IS NOT NULL AND stock >= $2::int`,
+            [it.product_id, qty]
+          );
+        }
+        await db.query(`UPDATE orders SET stock_deducted = true WHERE id = $1`, [req.params.id]);
+      }
+      await setStatus(req.params.id, 'accepted', 'vendor');
+      await notify(bundle.order.customer_id, { title: 'تم قبول طلبك', body: `طلبك رقم ${req.params.id} قيد التحضير`, type: 'order_accepted', orderId: req.params.id });
+    } else if (to === 'rejected') {
+      const reason = (req.body || {}).reason ? String(req.body.reason).slice(0, 300) : null;
+      await setStatus(req.params.id, 'rejected', 'vendor', { reject_reason: reason });
+      await notify(bundle.order.customer_id, { title: 'اعتذر المتجر عن طلبك', body: reason || 'تم رفض الطلب', type: 'order_rejected', orderId: req.params.id });
+    } else if (to === 'ready_for_pickup') {
+      await setStatus(req.params.id, 'ready_for_pickup', 'vendor');
+      // TODO: إشعار realtime للمشرف (dispatch_needs_assignment)
+    } else {
+      await setStatus(req.params.id, to, 'vendor');
+    }
+
+    res.json(serializeOrder(await loadOrder(req.params.id)));
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

@@ -427,3 +427,63 @@ ON CONFLICT (email) DO NOTHING;
 INSERT INTO staff_users (name, email, password_hash, role, vendor_id) VALUES
  ('صاحب مترو ماركت', 'owner@metro.test', '$2a$10$57UP2ntlwmC0n0sEBq5a8OQD1ijdkki759kAIYORznsdpHGvDqRCG', 'vendor_owner', 'metro')
 ON CONFLICT (email) DO NOTHING;
+
+-- ============================================================================
+--  الدليفري + التوزيع (Dispatch/Driver) — BACKEND_HANDOFF.md §3-4, §10.10, §11
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS drivers (
+    id                  VARCHAR(60) PRIMARY KEY,
+    staff_user_id       UUID REFERENCES staff_users(id) ON DELETE SET NULL,
+    name                VARCHAR(150) NOT NULL,
+    phone               VARCHAR(20),
+    photo               TEXT,
+    vehicle_type        VARCHAR(20) NOT NULL DEFAULT 'motorcycle',
+    status              VARCHAR(10) NOT NULL DEFAULT 'offline',   -- available | busy | offline
+    is_online           BOOLEAN NOT NULL DEFAULT false,
+    current_order_id    VARCHAR(30),
+    lat                 NUMERIC(9,6),
+    lng                 NUMERIC(9,6),
+    location_updated_at TIMESTAMPTZ,
+    zone                VARCHAR(120),
+    rating              NUMERIC(3,2) NOT NULL DEFAULT 0,
+    deliveries_count    INTEGER NOT NULL DEFAULT 0,
+    last_assigned_at    TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status, is_online);
+
+-- حالة الدليفري الفرعية داخل التوصيل
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS driver_sub_status VARCHAR(20);
+-- تخفيض المخزون عند قبول التاجر — علم إن الطلب اتخصم مخزونه
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS stock_deducted BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS reject_reason TEXT;
+
+-- سجل عروض التوصيل للدليفري (rotation + مهلة رفض)
+CREATE TABLE IF NOT EXISTS delivery_offers (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    order_id    VARCHAR(30) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    driver_id   VARCHAR(60) NOT NULL REFERENCES drivers(id) ON DELETE CASCADE,
+    offered_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at  TIMESTAMPTZ,
+    response    VARCHAR(10),    -- accepted | rejected | timeout
+    responded_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_delivery_offers_order ON delivery_offers(order_id);
+
+-- ---------- حسابات + بيانات تجريبية ----------
+-- driver1@quesnago.com / driver1234   ·   dispatch1@quesnago.com / disp1234
+INSERT INTO staff_users (id, name, email, phone, password_hash, role, driver_id) VALUES
+ ('d0000000-0000-4000-8000-000000000001', 'محمود الدليفري', 'driver1@quesnago.com', '+201000000030',
+  '$2a$10$J0L78m889Bd2ls7Q49ddfeNBPM1sB91Uvk4yxRUrMj9TuiI/cURNO', 'driver', 'drv_1'),
+ ('c0000000-0000-4000-8000-000000000001', 'المشرف سامي', 'dispatch1@quesnago.com', '+201000000040',
+  '$2a$10$b0RRbt6QzR8xLUk4O8822.XWe0ACg/QSVPstU7f8oNh5xLmM3JdVO', 'dispatcher', NULL)
+ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO drivers (id, staff_user_id, name, phone, vehicle_type, status, is_online, zone) VALUES
+ ('drv_1', 'd0000000-0000-4000-8000-000000000001', 'محمود الدليفري', '+201000000030', 'motorcycle', 'available', true, 'مدينة نصر'),
+ ('drv_2', NULL, 'كريم الدليفري', '+201000000031', 'car', 'available', true, 'مدينة نصر')
+ON CONFLICT (id) DO NOTHING;
+
+UPDATE staff_users SET driver_id = 'drv_1' WHERE id = 'd0000000-0000-4000-8000-000000000001' AND driver_id IS NULL;
