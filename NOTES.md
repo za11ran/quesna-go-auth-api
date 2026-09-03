@@ -32,13 +32,17 @@
 حسابات تجريبية: `admin@quesnago.com/admin1234` · `owner@metro.test/metro1234` · `dispatch1@quesnago.com/disp1234` · driver: phone `+201000000030` / `driver1234`.
 
 ## الباقي
-1. **رفع الصور** (`/uploads` + sharp) — لوجو/غلاف المتجر + صورة المنتج (تظهر بعد موافقة الأدمن).
-2. **Vendor** تكميلي: مواعيد العمل، الموظفين (`/vendor/staff`)، العروض CRUD، bulk-price.
+1. **Vendor** تكميلي: الموظفين (`/vendor/staff`)، bulk-price.
+2. **Admin** تكميلي: أقسام الهوم CRUD، البانرات CRUD، حسابات الدليفري/المشرفين CRUD، تقارير.
 3. **Realtime** (Socket.IO): `vendor_new_order` · `dispatch_needs_assignment` · `driver_new_assignment` + تتبّع `driver.location` أثناء `on_the_way`. Push عبر `user_devices`.
 4. مهلة رفض عرض التوصيل (`delivery_offers.expires_at`) → auto reassign للي بعده (worker/cron).
 5. **الداش بورد** (React، RTL، دخول بالدور).
 6. openapi.yaml للمسارات الجديدة — لسه على auth بس.
 7. `/orders/quick` (multipart) — لسه.
+
+## تم مؤخرًا (فوق المذكور)
+- **رفع الصور**: `src/upload.js` (multer memory + sharp → webp، حد 5MB، jpg/png/webp)، يتقدّم من `/uploads` (Nginx مباشرة على السيرفر). لوجو/غلاف المتجر + صورة المنتج → **Change Request** (تظهر بعد موافقة الأدمن).
+- **Vendor**: `PUT /vendor/profile/working-hours` (فوري)، **عروض CRUD** (`GET/POST/PUT/DELETE /vendor/offers`) كلها Change Request. `applyChangeRequest` بقى يدعم `entity_type='offer'`.
 
 ## اختبار محلي
 `pg-mem` غير مثبت كـ dependency — تُستخدم مؤقتًا في سكربتات الاختبار.

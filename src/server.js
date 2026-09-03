@@ -8,6 +8,10 @@ app.use(cors());                                  // يسمح للفرونت/ا�
 app.use(express.json());                           // يقرأ body بصيغة JSON
 app.use(express.urlencoded({ extended: true }));   // يقرأ body بصيغة form (x-www-form-urlencoded)
 
+// الصور المرفوعة
+const { UPLOADS_DIR } = require('./upload');
+app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '30d', fallthrough: false }));
+
 // فحص سريع أن السيرفر شغّال
 app.get('/', (req, res) =>
   res.json({ ok: true, service: 'delivery-auth-api', time: new Date().toISOString() })

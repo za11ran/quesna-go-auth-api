@@ -12,6 +12,7 @@ const { signStaffToken, staffAuth } = require('./staff-auth');
 const { submitChangeRequest, vendorFieldsNeedApproval, productFieldsNeedApproval } = require('./changeRequests');
 const { loadOrder, serializeOrder, setStatus } = require('./orderView');
 const { notify } = require('./notify');
+const { imageUpload, saveImage } = require('./upload');
 
 const nowIso = () => new Date().toISOString();
 const fail = (res, s, code, message) =>
@@ -116,6 +117,45 @@ router.put('/profile', vendorRole, async (req, res, next) => {
   } catch (e) {
     next(e);
   }
+});
+
+// رفع لوجو/غلاف — الصورة تترفع فورًا لكن تظهر بعد موافقة الأدمن (Change Request)
+async function vendorImageCR(req, res, field, opts) {
+  if (req.staff.role !== 'vendor_owner') return fail(res, 403, 'FORBIDDEN', 'صلاحية غير كافية');
+  if (!req.file) return fail(res, 422, 'IMAGE_REQUIRED', 'الصورة مطلوبة');
+  const img = await saveImage(req.file, opts);
+  const cur = (await db.query(`SELECT ${field} FROM vendors WHERE id = $1`, [req.staff.vendor_id])).rows[0] || {};
+  const out = await submitChangeRequest({
+    vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
+    entityType: 'vendor', entityId: req.staff.vendor_id, action: 'update',
+    currentValues: { [field]: cur[field] || null }, newValues: { [field]: img.url },
+  });
+  res.status(202).json({ ...out, url: img.url });
+}
+router.post('/profile/logo', vendorRole, imageUpload, (req, res, next) =>
+  vendorImageCR(req, res, 'logo', { folder: 'vendors', width: 512 }).catch(next));
+router.post('/profile/cover', vendorRole, imageUpload, (req, res, next) =>
+  vendorImageCR(req, res, 'cover_image', { folder: 'vendors', width: 1600 }).catch(next));
+
+// مواعيد العمل — فوري (مش من الحقول الحسّاسة افتراضيًا)
+router.put('/profile/working-hours', vendorRole, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    if (!b.working_hours || typeof b.working_hours !== 'object') {
+      return fail(res, 422, 'WORKING_HOURS_REQUIRED', 'مواعيد العمل مطلوبة');
+    }
+    await db.query(
+      `UPDATE vendors SET working_hours = $2,
+              working_hours_text_ar = COALESCE($3, working_hours_text_ar),
+              working_hours_text_en = COALESCE($4, working_hours_text_en),
+              updated_at = now()
+        WHERE id = $1`,
+      [req.staff.vendor_id, JSON.stringify(b.working_hours),
+       b.working_hours_text_ar ? String(b.working_hours_text_ar) : null,
+       b.working_hours_text_en ? String(b.working_hours_text_en) : null]
+    );
+    res.json((await db.query(`SELECT * FROM vendors WHERE id = $1`, [req.staff.vendor_id])).rows[0]);
+  } catch (e) { next(e); }
 });
 
 // PUT /vendor/profile/status — فتح/قفل فوري
@@ -273,6 +313,98 @@ router.delete('/products/:id', vendorRole, async (req, res, next) => {
   } catch (e) {
     next(e);
   }
+});
+
+// POST /vendor/products/:id/image — رفع صورة المنتج -> Change Request (تظهر بعد الموافقة)
+router.post('/products/:id/image', vendorRole, imageUpload, async (req, res, next) => {
+  try {
+    if (req.staff.role !== 'vendor_owner') return fail(res, 403, 'FORBIDDEN', 'صلاحية غير كافية');
+    const cur = (await db.query(`SELECT id, image FROM products WHERE id = $1 AND vendor_id = $2 AND deleted_at IS NULL`, [req.params.id, req.staff.vendor_id])).rows[0];
+    if (!cur) return fail(res, 404, 'PRODUCT_NOT_FOUND', 'المنتج غير موجود');
+    if (!req.file) return fail(res, 422, 'IMAGE_REQUIRED', 'الصورة مطلوبة');
+    const img = await saveImage(req.file, { folder: 'products', width: 1000 });
+    const out = await submitChangeRequest({
+      vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
+      entityType: 'product', entityId: req.params.id, action: 'update',
+      currentValues: { image: cur.image || null }, newValues: { image: img.url },
+    });
+    res.status(202).json({ ...out, url: img.url });
+  } catch (e) { next(e); }
+});
+
+/* -------- offers (§8.4) — كلها Change Request -------- */
+const OFFER_FIELDS = ['title_ar', 'title_en', 'description_ar', 'description_en', 'banner_image',
+  'scope', 'target_id', 'discount_type', 'discount_value', 'starts_at', 'ends_at', 'is_active'];
+
+router.get('/offers', vendorRole, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`SELECT * FROM offers WHERE vendor_id = $1 ORDER BY created_at DESC`, [req.staff.vendor_id]);
+    res.json({ data: rows });
+  } catch (e) { next(e); }
+});
+
+router.post('/offers', vendorRole, async (req, res, next) => {
+  try {
+    if (req.staff.role !== 'vendor_owner') return fail(res, 403, 'FORBIDDEN', 'صلاحية غير كافية');
+    const b = req.body || {};
+    if (!b.title_ar && !b.title) return fail(res, 422, 'TITLE_REQUIRED', 'عنوان العرض مطلوب');
+    if (num(b.discount_value) === null) return fail(res, 422, 'DISCOUNT_REQUIRED', 'قيمة الخصم مطلوبة');
+    const id = `off_${req.staff.vendor_id}_${Date.now().toString(36)}`;
+    const nv = {
+      id, vendor_id: req.staff.vendor_id,
+      title_ar: String(b.title_ar || b.title), title_en: String(b.title_en || b.title || b.title_ar),
+      description_ar: b.description_ar ? String(b.description_ar) : '',
+      description_en: b.description_en ? String(b.description_en) : '',
+      banner_image: b.banner_image ? String(b.banner_image) : null,
+      scope: ['store', 'category', 'product'].includes(b.scope) ? b.scope : 'store',
+      target_id: b.target_id ? String(b.target_id) : null,
+      discount_type: b.discount_type === 'amount' ? 'amount' : 'percent',
+      discount_value: num(b.discount_value),
+      starts_at: b.starts_at || null, ends_at: b.ends_at || null,
+      is_active: b.is_active !== false,
+    };
+    const out = await submitChangeRequest({
+      vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
+      entityType: 'offer', entityId: id, action: 'create', currentValues: {}, newValues: nv,
+    });
+    res.status(202).json(out);
+  } catch (e) { next(e); }
+});
+
+router.put('/offers/:id', vendorRole, async (req, res, next) => {
+  try {
+    if (req.staff.role !== 'vendor_owner') return fail(res, 403, 'FORBIDDEN', 'صلاحية غير كافية');
+    const cur = (await db.query(`SELECT * FROM offers WHERE id = $1 AND vendor_id = $2`, [req.params.id, req.staff.vendor_id])).rows[0];
+    if (!cur) return fail(res, 404, 'OFFER_NOT_FOUND', 'العرض غير موجود');
+    const b = req.body || {};
+    const changes = {};
+    for (const k of OFFER_FIELDS) {
+      if (b[k] === undefined) continue;
+      const val = k === 'discount_value' ? num(b[k]) : k === 'is_active' ? b[k] !== false : b[k] === null ? null : String(b[k]);
+      if (String(cur[k] ?? '') !== String(val ?? '')) changes[k] = val;
+    }
+    if (!Object.keys(changes).length) return fail(res, 422, 'NOTHING_TO_UPDATE', 'مفيش تعديلات');
+    const out = await submitChangeRequest({
+      vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
+      entityType: 'offer', entityId: req.params.id, action: 'update',
+      currentValues: Object.fromEntries(Object.keys(changes).map((k) => [k, cur[k]])), newValues: changes,
+    });
+    res.status(202).json(out);
+  } catch (e) { next(e); }
+});
+
+router.delete('/offers/:id', vendorRole, async (req, res, next) => {
+  try {
+    if (req.staff.role !== 'vendor_owner') return fail(res, 403, 'FORBIDDEN', 'صلاحية غير كافية');
+    const cur = (await db.query(`SELECT id, title_ar FROM offers WHERE id = $1 AND vendor_id = $2`, [req.params.id, req.staff.vendor_id])).rows[0];
+    if (!cur) return fail(res, 404, 'OFFER_NOT_FOUND', 'العرض غير موجود');
+    const out = await submitChangeRequest({
+      vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
+      entityType: 'offer', entityId: req.params.id, action: 'delete',
+      currentValues: { id: cur.id, title_ar: cur.title_ar }, newValues: {},
+    });
+    res.status(202).json(out);
+  } catch (e) { next(e); }
 });
 
 /* -------- change requests (vendor side) -------- */

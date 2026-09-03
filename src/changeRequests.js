@@ -116,8 +116,26 @@ async function applyChangeRequest(cr) {
       }
     }
     if (cr.entity_id) await db.query(`UPDATE products SET has_pending_change = false WHERE id = $1`, [cr.entity_id]);
+  } else if (cr.entity_type === 'offer') {
+    if (cr.action === 'delete') {
+      await db.query(`DELETE FROM offers WHERE id = $1 AND vendor_id = $2`, [cr.entity_id, cr.vendor_id]);
+    } else if (cr.action === 'create') {
+      const cols = Object.keys(nv);
+      const ph = cols.map((_, i) => `$${i + 1}`).join(', ');
+      await db.query(
+        `INSERT INTO offers (${cols.join(', ')}) VALUES (${ph})
+         ON CONFLICT (id) DO UPDATE SET ${cols.map((c) => `${c} = EXCLUDED.${c}`).join(', ')}`,
+        cols.map((c) => nv[c])
+      );
+    } else {
+      const cols = Object.keys(nv);
+      if (cols.length) {
+        const set = cols.map((c, i) => `${c} = $${i + 1}`).join(', ');
+        await db.query(`UPDATE offers SET ${set} WHERE id = $${cols.length + 1} AND vendor_id = $${cols.length + 2}`,
+          [...cols.map((c) => nv[c]), cr.entity_id, cr.vendor_id]);
+      }
+    }
   }
-  // offers / product_option منفصلة تُضاف لاحقًا
 }
 
 module.exports = { submitChangeRequest, applyChangeRequest, vendorFieldsNeedApproval, productFieldsNeedApproval, rules };
