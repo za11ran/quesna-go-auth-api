@@ -6,7 +6,7 @@
 ### 1) قائمة القرى (للـ dropdown في شاشة التسجيل)
 GET {{baseUrl}}/api/villages
 
-### 2) إنشاء حساب جديد  (الاسم + الفون + القرية + حقول بروفايل اختيارية)
+### 2) إنشاء حساب جديد  (الاسم + الفون + القرية بس)
 # الرد هيرجّع dev_otp في وضع التطوير - انسخه للطلب رقم 3
 POST {{baseUrl}}/api/auth/register
 Content-Type: application/json
@@ -14,12 +14,7 @@ Content-Type: application/json
 {
   "name": "أحمد محمد",
   "phone": "01065465118",
-  "village_id": 1,
-  "avatar_url": "https://i.pravatar.cc/150?img=12",
-  "email": "ahmed@example.com",
-  "birth_date": "1998-04-25",
-  "gender": "male",
-  "preferred_language": "ar"
+  "village_id": 1
 }
 
 ### 3) تأكيد كود الـ OTP بعد التسجيل

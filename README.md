@@ -141,7 +141,7 @@ Authorization: Bearer <التوكن اللي رجع من verify-otp>
 | الطريقة | المسار | الجسم (body) | الوظيفة |
 |--------|--------|--------------|---------|
 | `GET`   | `/api/villages` | — | قائمة القرى للـ dropdown |
-| `POST`  | `/api/auth/register` | `name, phone, village_id` + اختياري: `avatar_url, email, birth_date, gender, preferred_language` | إنشاء حساب + إرسال OTP |
+| `POST`  | `/api/auth/register` | `name, phone, village_id` (بس) | إنشاء حساب + إرسال OTP |
 | `POST`  | `/api/auth/login` | `phone` | إرسال OTP للدخول |
 | `POST`  | `/api/auth/verify-otp` | `phone, code` | تأكيد الكود + إرجاع `token` + البروفايل |
 | `POST`  | `/api/auth/resend-otp` | `phone` | إعادة إرسال الكود |

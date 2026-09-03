@@ -57,9 +57,11 @@ String messageFor(String code, String lang) {
 }
 ```
 
-## اللغة في الطلبات
+## اللغة
 
-- عند **التسجيل** ابعت `preferred_language` = `ar` أو `en` (اختياري، الافتراضي `ar`).
-- المستخدم يقدر يغيّرها لاحقًا عبر `PATCH /api/auth/me` بحقل `preferred_language`.
-- بتُرجع دايمًا في `user.preferred_language` — استخدمها لإرسال SMS/إشعارات بلغته لاحقًا.
+- **التسجيل يطلب 3 حقول بس**: `name` + `phone` + `village_id`.
+- اللغة والبروفايل (الصورة، الإيميل، تاريخ الميلاد، النوع) بتتضاف بعد الدخول
+  من شاشة البروفايل عبر `PATCH /api/auth/me`.
+- `preferred_language` افتراضيها `ar`، وبتُرجع في `user.preferred_language` —
+  استخدمها لإرسال SMS/إشعارات بلغة المستخدم لاحقًا.
 - مفيش داعي تبعت اللغة في كل طلب — الترجمة مسؤولية التطبيق عبر `error_code`.

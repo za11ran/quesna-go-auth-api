@@ -128,22 +128,9 @@ router.post('/register', authLimiter, form, async (req, res, next) => {
       return fail(res, 422, 'VILLAGE_NOT_FOUND', 'القرية غير موجودة');
     }
 
-    // حقول البروفايل الاختيارية
-    const avatar = cleanUrl(req.body.avatar_url);
-    if (avatar === undefined)
-      return fail(res, 422, 'INVALID_AVATAR_URL', 'رابط الصورة غير صحيح (لازم يبدأ بـ http أو https)');
-    const email = cleanEmail(req.body.email);
-    if (email === undefined)
-      return fail(res, 422, 'INVALID_EMAIL', 'الإيميل غير صحيح');
-    const birth = cleanBirthDate(req.body.birth_date);
-    if (birth === undefined)
-      return fail(res, 422, 'INVALID_BIRTH_DATE', 'تاريخ الميلاد غير صحيح (الصيغة YYYY-MM-DD)');
-    const gender = cleanGender(req.body.gender);
-    if (gender === undefined)
-      return fail(res, 422, 'INVALID_GENDER', 'النوع لازم يكون male أو female');
-    const lang = cleanLang(req.body.preferred_language);
-    if (lang === undefined)
-      return fail(res, 422, 'INVALID_LANGUAGE', 'اللغة لازم تكون ar أو en');
+    // التسجيل يطلب 3 حقول بس: الاسم + رقم الموبايل + القرية.
+    // باقي بيانات البروفايل (الصورة، الإيميل، تاريخ الميلاد...) بتتضاف لاحقًا
+    // من شاشة البروفايل عبر PATCH /api/auth/me.
 
     // هل الرقم مسجّل قبل كده؟
     const existing = await db.query(
@@ -151,43 +138,24 @@ router.post('/register', authLimiter, form, async (req, res, next) => {
       [p.e164]
     );
 
-    // الإيميل (لو اتبعت) لازم يكون غير مستخدم من حساب تاني
-    if (email) {
-      const dupe = await db.query('SELECT id FROM users WHERE email = $1', [email]);
-      if (dupe.rowCount && !(existing.rowCount && dupe.rows[0].id === existing.rows[0].id)) {
-        return fail(res, 409, 'EMAIL_TAKEN', 'الإيميل مستخدم بالفعل');
-      }
-    }
-
     let userId;
     if (existing.rowCount > 0) {
       if (existing.rows[0].phone_verified_at) {
         return fail(res, 409, 'ALREADY_REGISTERED', 'الرقم مسجّل بالفعل، من فضلك سجّل الدخول');
       }
-      // حساب موجود لكنه لم يُفعّل: حدّث بياناته وأعد إرسال الكود
+      // حساب موجود لكنه لم يُفعّل: حدّث الاسم والقرية وأعد إرسال الكود
       userId = existing.rows[0].id;
       await db.query(
-        `UPDATE users
-            SET full_name          = $1,
-                village_id         = $2,
-                avatar_url         = COALESCE($3, avatar_url),
-                email              = COALESCE($4, email),
-                birth_date         = COALESCE($5, birth_date),
-                gender             = COALESCE($6, gender),
-                preferred_language = COALESCE($7, preferred_language),
-                updated_at         = now()
-          WHERE id = $8`,
-        [String(name).trim(), vid, avatar, email, birth, gender, lang, userId]
+        `UPDATE users SET full_name = $1, village_id = $2, updated_at = now() WHERE id = $3`,
+        [String(name).trim(), vid, userId]
       );
     } else {
       try {
         const ins = await db.query(
-          `INSERT INTO users
-             (full_name, phone, village_id, avatar_url, email, birth_date, gender,
-              preferred_language, role, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'ar'), 'customer', 'pending_verification')
+          `INSERT INTO users (full_name, phone, village_id, role, status)
+           VALUES ($1, $2, $3, 'customer', 'pending_verification')
            RETURNING id`,
-          [String(name).trim(), p.e164, vid, avatar, email, birth, gender, lang]
+          [String(name).trim(), p.e164, vid]
         );
         userId = ins.rows[0].id;
       } catch (e) {

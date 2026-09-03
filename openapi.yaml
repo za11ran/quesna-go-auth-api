@@ -58,8 +58,9 @@ paths:
       summary: Register
       description: >
         Create an account and send an OTP code. Body is form-data.
-        Required: name, phone, village_id. Optional: avatar_url (image URL),
-        email, birth_date (YYYY-MM-DD), gender (male|female), preferred_language (ar|en).
+        Only 3 fields: name, phone, village_id.
+        Profile details (photo, email, birth_date, gender, language) are added
+        later from the profile screen via PATCH /api/auth/me.
       requestBody:
         required: true
         content:
@@ -68,11 +69,6 @@ paths:
               name: "أحمد محمد"
               phone: "01065465118"
               village_id: 1
-              avatar_url: "https://i.pravatar.cc/150?img=12"
-              email: "ahmed@example.com"
-              birth_date: "1998-04-25"
-              gender: "male"
-              preferred_language: "ar"
             schema:
               type: object
               required: [name, phone, village_id]
@@ -82,11 +78,6 @@ paths:
                   type: string
                   description: Egyptian mobile. Accepts 01065465118, 1065465118 or +201065465118
                 village_id: { type: integer }
-                avatar_url: { type: string, description: Public image URL (http/https) }
-                email: { type: string }
-                birth_date: { type: string, example: "1998-04-25" }
-                gender: { type: string, enum: [male, female] }
-                preferred_language: { type: string, enum: [ar, en] }
       responses:
         '201':
           description: Account created, OTP sent
