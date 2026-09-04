@@ -24,8 +24,11 @@ export default function Driver() {
   const d = me.data;
 
   async function toggleOnline() {
-    await api.put('/api/driver/status', { status: d.status === 'offline' ? 'available' : 'offline' });
-    me.reload();
+    setBusy('toggleOnline'); setMsg(null);
+    try {
+      await api.put('/api/driver/status', { status: d.status === 'offline' ? 'available' : 'offline' });
+      me.reload();
+    } catch (e) { setMsg(e.message); } finally { setBusy(null); }
   }
   async function act(id, path, body) {
     setBusy(id + path); setMsg(null);
@@ -44,7 +47,11 @@ export default function Driver() {
           <p className="page-sub">{d ? `${d.name} · توصيلات: ${d.deliveries_count}` : '…'}</p>
         </div>
         {d && (
-          <button className={`btn ${d.status === 'offline' ? 'primary' : ''}`} onClick={toggleOnline}>
+          <button
+            className={`btn ${d.status === 'offline' ? 'primary' : ''}`}
+            disabled={busy === 'toggleOnline'}
+            onClick={toggleOnline}
+          >
             {d.status === 'offline' ? 'ابدأ العمل (أونلاين)' : 'إيقاف (أوفلاين)'}
           </button>
         )}
