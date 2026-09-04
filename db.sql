@@ -175,6 +175,11 @@ ALTER TABLE vendors ADD COLUMN IF NOT EXISTS order_mode VARCHAR(10) NOT NULL DEF
 -- لوحة «التجّار». السعر والكمية ومواعيد الفتح/الغلق والعروض فورية لكل التجّار بغض
 -- النظر عن العلامة دي (شوف src/vendor.js).
 ALTER TABLE vendors ADD COLUMN IF NOT EXISTS full_permissions BOOLEAN NOT NULL DEFAULT false;
+-- الحد الأدنى للطلب اتشال من التاجر خالص (مفيش UI/API تقدر تغيّره تاني) — نصفّر أي
+-- قيمة قديمة عشان الطلبات ما تتمنعش بحد أدنى قديم. delivery_fee فاضل كعمود غير
+-- مستخدم في حساب إجمالي العميل (شوف ملاحظة أسعار التوصيل تحت)، معمول له UPDATE هنا كمان
+-- عشان النسخ القديمة اللي كانت متسجّلة برسوم مختلفة تفضل واضحة إنها مش بتُستخدم.
+UPDATE vendors SET min_order = 0 WHERE min_order <> 0;
 CREATE INDEX IF NOT EXISTS idx_vendors_type   ON vendors(type) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_vendors_status ON vendors(status);
 
@@ -267,13 +272,13 @@ INSERT INTO vendors (id, name_ar, name_en, type, description_ar, description_en,
 VALUES
  ('metro', 'مترو ماركت', 'Metro Market', 'supermarket',
   'سوبر ماركت لكل احتياجات البيت', 'Everything for your home', '+201000000020',
-  4.6, 128, true, 'approved', 15, 50, 25, 'شارع مكرم عبيد، القاهرة', 'Makram Ebeid St, Cairo',
+  4.6, 128, true, 'approved', 0, 0, 25, 'شارع مكرم عبيد، القاهرة', 'Makram Ebeid St, Cairo',
   30.0605, 31.3450, '["مدينة نصر","مصر الجديدة"]'::jsonb,
   '{"sat":{"open":"10:00","close":"23:59","closed":false},"sun":{"open":"10:00","close":"23:59","closed":false}}'::jsonb,
   '10:00 ص - 12:00 م', '10:00 AM - 12:00 AM'),
  ('koshari-abbas', 'كشري عباس', 'Abbas Koshari', 'restaurant',
   'اشهر كشري في المنطقة', 'The favorite koshari in town', '+201000000021',
-  4.4, 210, true, 'approved', 12, 40, 20, 'شارع عباس العقاد، القاهرة', 'Abbas El Akkad St, Cairo',
+  4.4, 210, true, 'approved', 0, 0, 20, 'شارع عباس العقاد، القاهرة', 'Abbas El Akkad St, Cairo',
   30.0626, 31.3489, '["مدينة نصر"]'::jsonb,
   '{"sat":{"open":"11:00","close":"02:00","closed":false}}'::jsonb,
   '11:00 ص - 2:00 ص', '11:00 AM - 2:00 AM')
@@ -500,7 +505,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 INSERT INTO app_settings (key, value) VALUES
- ('approval_rules', '{"vendor_fields":["name_ar","name_en","delivery_fee","min_order","logo","cover_image"],"product_create":true,"product_update_fields":["name_ar","name_en","price","category","description_ar","description_en"],"product_delete":true,"product_options":true,"offers":true,"instant":["stock","is_available","is_open"]}'),
+ ('approval_rules', '{"vendor_fields":["name_ar","name_en","description_ar","description_en"],"product_create":true,"product_update_fields":["name_ar","name_en","category","description_ar","description_en"],"product_delete":true,"product_options":true,"offers":true,"instant":["stock","is_available","is_open","price","working_hours"]}'),
  ('delivery_pricing', '{"extra_vendor_fee": 15}')
 ON CONFLICT (key) DO NOTHING;
 

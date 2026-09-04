@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from '../../api';
+import { api, apiBase } from '../../api';
 import { useAsync, ErrBox, Empty, Pill, Modal, Field, statusTone } from '../../ui';
 
 export default function Vendors() {
@@ -39,10 +39,10 @@ export default function Vendors() {
       <ErrBox error={error} />
       <div className="card" style={{ overflow: 'auto' }}>
         <table>
-          <thead><tr><th>المعرّف</th><th>الاسم</th><th>النوع</th><th>الحالة</th><th>مفتوح؟</th><th>رسوم/حد أدنى</th><th>استلام الطلبات</th><th>الصلاحيات</th><th></th></tr></thead>
+          <thead><tr><th>المعرّف</th><th>الاسم</th><th>النوع</th><th>الحالة</th><th>مفتوح؟</th><th>استلام الطلبات</th><th>الصلاحيات</th><th></th></tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={9} className="empty">تحميل…</td></tr>
-              : rows.length === 0 ? <tr><td colSpan={9}><Empty /></td></tr>
+            {loading ? <tr><td colSpan={8} className="empty">تحميل…</td></tr>
+              : rows.length === 0 ? <tr><td colSpan={8}><Empty /></td></tr>
               : rows.map((v) => (
                 <tr key={v.id}>
                   <td>{v.id}</td>
@@ -50,7 +50,6 @@ export default function Vendors() {
                   <td>{v.type}</td>
                   <td><Pill tone={statusTone(v.status)}>{v.status}</Pill></td>
                   <td>{v.is_open ? '✓' : '✕'}</td>
-                  <td>{Number(v.delivery_fee)} / {Number(v.min_order)}</td>
                   <td>
                     <select
                       className="btn sm"
@@ -87,22 +86,33 @@ export default function Vendors() {
           </tbody>
         </table>
       </div>
-      {creating && <CreateVendor onClose={() => setCreating(false)} onDone={() => { setCreating(false); reload(); }} />}
+      {creating && (
+        <CreateVendor
+          onClose={() => setCreating(false)}
+          onDone={(newVendor) => { setCreating(false); reload(); if (newVendor) setEditing(newVendor); }}
+        />
+      )}
       {editing && <EditVendor vendor={editing} onClose={() => setEditing(null)} onDone={() => { setEditing(null); reload(); }} />}
     </>
   );
 }
 
 function CreateVendor({ onClose, onDone }) {
-  const [f, setF] = useState({ name_ar: '', name_en: '', type: 'restaurant', phone: '', delivery_fee: 15, min_order: 50, owner_name: '', owner_email: '', owner_password: '' });
+  const [f, setF] = useState({
+    name_ar: '', name_en: '', type: 'restaurant', phone: '',
+    opens_at: '10:00', closes_at: '02:00',
+    owner_name: '', owner_email: '', owner_password: '',
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   async function submit() {
     setBusy(true); setError(null);
-    try { await api.post('/api/admin/vendors', f); onDone(); }
-    catch (e) { setError(e); } finally { setBusy(false); }
+    try {
+      const created = await api.post('/api/admin/vendors', f);
+      onDone({ id: created.vendor_id, name_ar: f.name_ar, name_en: f.name_en, phone: f.phone });
+    } catch (e) { setError(e); } finally { setBusy(false); }
   }
 
   return (
@@ -118,13 +128,17 @@ function CreateVendor({ onClose, onDone }) {
       </Field>
       <Field label="تليفون"><input value={f.phone} onChange={set('phone')} /></Field>
       <div className="grid k2">
-        <Field label="رسوم التوصيل"><input type="number" value={f.delivery_fee} onChange={set('delivery_fee')} /></Field>
-        <Field label="الحد الأدنى"><input type="number" value={f.min_order} onChange={set('min_order')} /></Field>
+        <Field label="مواعيد العمل — من"><input type="time" value={f.opens_at} onChange={set('opens_at')} /></Field>
+        <Field label="إلى"><input type="time" value={f.closes_at} onChange={set('closes_at')} /></Field>
       </div>
+      <p className="page-sub" style={{ margin: '-4px 0 10px' }}>
+        نفس المواعيد لكل أيام الأسبوع مبدئيًا — التاجر يقدر يعدّلها بعد كده من لوحته براحته.
+      </p>
       <hr style={{ border: 0, borderTop: '1px solid var(--line)', margin: '8px 0 14px' }} />
       <Field label="اسم صاحب المتجر"><input value={f.owner_name} onChange={set('owner_name')} /></Field>
       <Field label="إيميل الدخول"><input value={f.owner_email} onChange={set('owner_email')} /></Field>
       <Field label="كلمة سر الدخول"><input value={f.owner_password} onChange={set('owner_password')} /></Field>
+      <p className="page-sub" style={{ marginTop: 10 }}>هتقدر تضيف صورة المتجر مباشرة بعد الإنشاء.</p>
     </Modal>
   );
 }
@@ -133,10 +147,13 @@ function EditVendor({ vendor, onClose, onDone }) {
   const [f, setF] = useState({
     name_ar: vendor.name_ar || '', name_en: vendor.name_en || '',
     description_ar: vendor.description_ar || '', description_en: vendor.description_en || '',
-    phone: vendor.phone || '', delivery_fee: vendor.delivery_fee ?? 0, min_order: vendor.min_order ?? 0,
+    phone: vendor.phone || '',
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [logo, setLogo] = useState(vendor.logo || null);
+  const [cover, setCover] = useState(vendor.cover_image || null);
+  const [imgBusy, setImgBusy] = useState(null);
   const staffList = useAsync(() => api.get(`/api/admin/vendors/${vendor.id}/staff`));
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
@@ -146,19 +163,44 @@ function EditVendor({ vendor, onClose, onDone }) {
     catch (e) { setError(e); } finally { setBusy(false); }
   }
 
+  async function upImg(field, file) {
+    setImgBusy(field);
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const r = await api.upload(`/api/admin/vendors/${vendor.id}/${field}`, fd);
+      if (field === 'logo') setLogo(r.url); else setCover(r.url);
+    } finally { setImgBusy(null); }
+  }
+
   return (
     <Modal title={`تعديل ${vendor.name_ar}`} onClose={onClose}
       footer={<button className="btn primary" disabled={busy} onClick={submit}>حفظ بيانات المتجر</button>}>
       <ErrBox error={error} />
+
+      <p className="page-sub" style={{ margin: '0 0 6px' }}>صورة المتجر — الأدمن بس اللي يقدر يغيّرها</p>
+      <div className="row" style={{ gap: 12, marginBottom: 14 }}>
+        <div className="row" style={{ gap: 6 }}>
+          {logo && <img src={apiBase + logo} width={40} height={40} style={{ borderRadius: 10, objectFit: 'cover' }} alt="" />}
+          <label className="btn sm" style={{ opacity: imgBusy === 'logo' ? 0.5 : 1 }}>
+            {imgBusy === 'logo' ? '…' : 'لوجو'}
+            <input type="file" hidden accept="image/*" onChange={(e) => e.target.files[0] && upImg('logo', e.target.files[0])} />
+          </label>
+        </div>
+        <div className="row" style={{ gap: 6 }}>
+          {cover && <img src={apiBase + cover} width={64} height={40} style={{ borderRadius: 10, objectFit: 'cover' }} alt="" />}
+          <label className="btn sm" style={{ opacity: imgBusy === 'cover' ? 0.5 : 1 }}>
+            {imgBusy === 'cover' ? '…' : 'غلاف'}
+            <input type="file" hidden accept="image/*" onChange={(e) => e.target.files[0] && upImg('cover', e.target.files[0])} />
+          </label>
+        </div>
+      </div>
+
       <Field label="اسم المتجر (عربي)"><input value={f.name_ar} onChange={set('name_ar')} /></Field>
       <Field label="اسم المتجر (إنجليزي)"><input value={f.name_en} onChange={set('name_en')} /></Field>
       <Field label="الوصف (عربي)"><input value={f.description_ar} onChange={set('description_ar')} /></Field>
       <Field label="الوصف (إنجليزي)"><input value={f.description_en} onChange={set('description_en')} /></Field>
       <Field label="تليفون"><input value={f.phone} onChange={set('phone')} /></Field>
-      <div className="grid k2">
-        <Field label="رسوم التوصيل"><input type="number" value={f.delivery_fee} onChange={set('delivery_fee')} /></Field>
-        <Field label="الحد الأدنى"><input type="number" value={f.min_order} onChange={set('min_order')} /></Field>
-      </div>
 
       <hr style={{ border: 0, borderTop: '1px solid var(--line)', margin: '14px 0' }} />
       <strong>حسابات الدخول</strong>

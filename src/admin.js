@@ -278,9 +278,9 @@ router.put('/vendors/:id', adminOnly, async (req, res, next) => {
     const cols = [];
     const params = [];
     for (const k of ['name_ar', 'name_en', 'description_ar', 'description_en', 'phone',
-      'delivery_fee', 'min_order', 'avg_prep_time_minutes', 'address_ar', 'address_en']) {
+      'avg_prep_time_minutes', 'address_ar', 'address_en']) {
       if (b[k] === undefined) continue;
-      params.push(['delivery_fee', 'min_order', 'avg_prep_time_minutes'].includes(k) ? num(b[k]) : String(b[k]));
+      params.push(k === 'avg_prep_time_minutes' ? num(b[k]) : String(b[k]));
       cols.push(`${k} = $${params.length}`);
     }
     if (!cols.length) return fail(res, 422, 'NOTHING_TO_UPDATE', 'مفيش تعديلات');
@@ -455,7 +455,25 @@ router.post('/banners/image', adminOnly, imageUpload, async (req, res, next) => 
   } catch (e) { next(e); }
 });
 
+// جدول مواعيد افتراضي لو الأدمن ما بعتش واحد وقت إنشاء المتجر — نفس شكل working_hours
+// اللي بتقرأه لوحة التاجر (dashboard/src/pages/vendor/WorkingHours.jsx).
+function defaultWorkingHours(opensAt = '10:00', closesAt = '02:00') {
+  const days = {};
+  for (const k of ['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri']) {
+    days[k] = { open: opensAt, close: closesAt, closed: false };
+  }
+  return { always_open: false, days };
+}
+function timeArabic(t) {
+  const [h, m] = String(t).split(':').map(Number);
+  const ap = h < 12 ? 'ص' : 'م';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ap}`;
+}
+
 /* ================= إنشاء متجر + حساب صاحبه ================= */
+// رسوم التوصيل والحد الأدنى للطلب اتشالوا من التاجر خالص — التوصيل بقى بيتحسب من
+// سعر القرية (deliveryPricing.js) مش من المتجر، ومفيش حد أدنى للطلب تاني (شوف NOTES.md).
 router.post('/vendors', adminOnly, async (req, res, next) => {
   try {
     const b = req.body || {};
@@ -464,11 +482,19 @@ router.post('/vendors', adminOnly, async (req, res, next) => {
     const id = b.id ? slug(b.id) : slug(b.name_en || b.name_ar);
     const exists = await db.query(`SELECT 1 FROM vendors WHERE id = $1`, [id]);
     if (exists.rowCount) return fail(res, 409, 'VENDOR_EXISTS', 'معرّف المتجر مستخدم بالفعل');
+
+    const wh = b.working_hours && typeof b.working_hours === 'object'
+      ? b.working_hours
+      : defaultWorkingHours(b.opens_at, b.closes_at);
+    const whTextAr = b.working_hours_text_ar
+      || (wh.always_open ? 'مفتوح 24 ساعة' : `يوميًا ${timeArabic(b.opens_at || '10:00')} - ${timeArabic(b.closes_at || '02:00')}`);
+    const whTextEn = b.working_hours_text_en || (wh.always_open ? 'Open 24 hours' : whTextAr);
+
     await db.query(
-      `INSERT INTO vendors (id, name_ar, name_en, type, phone, delivery_fee, min_order, status, is_active)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'approved',true)`,
+      `INSERT INTO vendors (id, name_ar, name_en, type, phone, working_hours, working_hours_text_ar, working_hours_text_en, status, is_active)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'approved',true)`,
       [id, String(b.name_ar || b.name_en), String(b.name_en || b.name_ar),
-       b.type || 'restaurant', b.phone || null, num(b.delivery_fee) || 0, num(b.min_order) || 0]
+       b.type || 'restaurant', b.phone || null, JSON.stringify(wh), whTextAr, whTextEn]
     );
     const hash = await bcrypt.hash(String(b.owner_password), 10);
     const owner = await db.query(
@@ -482,6 +508,26 @@ router.post('/vendors', adminOnly, async (req, res, next) => {
     next(e);
   }
 });
+
+// لوجو/غلاف المتجر — الأدمن بس اللي بيحطهم/يغيّرهم، فورًا وبدون Change Request
+// (التاجر مالوش صلاحية يغيّر صورة متجره خالص — شوف vendor.js).
+router.post('/vendors/:id/logo', adminOnly, imageUpload, (req, res, next) =>
+  adminVendorImage(req, res, next, 'logo', { folder: 'vendors', width: 512 }));
+router.post('/vendors/:id/cover', adminOnly, imageUpload, (req, res, next) =>
+  adminVendorImage(req, res, next, 'cover_image', { folder: 'vendors', width: 1600 }));
+
+async function adminVendorImage(req, res, next, field, opts) {
+  try {
+    if (!req.file) return fail(res, 422, 'IMAGE_REQUIRED', 'الصورة مطلوبة');
+    const img = await saveImage(req.file, opts);
+    const r = await db.query(
+      `UPDATE vendors SET ${field} = $2, updated_at = now() WHERE id = $1 RETURNING id`,
+      [req.params.id, img.url]
+    );
+    if (!r.rowCount) return fail(res, 404, 'VENDOR_NOT_FOUND', 'المتجر غير موجود');
+    res.json({ success: true, url: img.url });
+  } catch (e) { next(e); }
+}
 
 /* ================= حسابات الدليفري ================= */
 router.get('/drivers', adminOnly, async (req, res, next) => {

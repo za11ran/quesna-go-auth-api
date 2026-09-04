@@ -6,7 +6,7 @@ const { sendEmail } = require('./mailer');
 // السعر والكمية ومواعيد الفتح/الغلق والعروض فورية دايمًا لكل التجّار (مش موجودين هنا
 // أصلًا) — بغض النظر عن القيم تحت أو عن vendors.full_permissions. شوف src/vendor.js.
 const DEFAULT_RULES = {
-  vendor_fields: ['name_ar', 'name_en', 'delivery_fee', 'min_order', 'logo', 'cover_image', 'description_ar', 'description_en'],
+  vendor_fields: ['name_ar', 'name_en', 'description_ar', 'description_en'],
   product_create: true,
   product_update_fields: ['name_ar', 'name_en', 'category', 'description_ar', 'description_en'],
   product_delete: true,

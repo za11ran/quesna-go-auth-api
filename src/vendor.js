@@ -89,13 +89,16 @@ router.put('/profile', vendorRole, async (req, res, next) => {
     const cur = (await db.query(`SELECT * FROM vendors WHERE id = $1`, [req.staff.vendor_id])).rows[0];
     if (!cur) return fail(res, 404, 'VENDOR_NOT_FOUND', 'المتجر غير موجود');
 
+    // ملحوظة: مفيش delivery_fee/min_order هنا خالص — رسوم التوصيل بقت بتتحسب من سعر
+    // القرية (deliveryPricing.js)، ومفيش حد أدنى للطلب تاني. الأدمن بس اللي يقدر يغيّر
+    // اسم/وصف المتجر مباشرة (PUT /admin/vendors/:id) بدون Change Request.
     const allowed = ['name_ar', 'name_en', 'description_ar', 'description_en', 'phone',
-      'delivery_fee', 'min_order', 'avg_prep_time_minutes', 'address_ar', 'address_en', 'lat', 'lng'];
+      'avg_prep_time_minutes', 'address_ar', 'address_en', 'lat', 'lng'];
     const b = req.body || {};
     const changes = {};
     for (const k of allowed) {
       if (b[k] === undefined) continue;
-      const val = ['delivery_fee', 'min_order', 'avg_prep_time_minutes', 'lat', 'lng'].includes(k) ? num(b[k]) : String(b[k]);
+      const val = ['avg_prep_time_minutes', 'lat', 'lng'].includes(k) ? num(b[k]) : String(b[k]);
       if (String(cur[k] ?? '') !== String(val ?? '')) changes[k] = val;
     }
     if (!Object.keys(changes).length) return fail(res, 422, 'NOTHING_TO_UPDATE', 'مفيش تعديلات');
@@ -122,28 +125,8 @@ router.put('/profile', vendorRole, async (req, res, next) => {
   }
 });
 
-// رفع لوجو/غلاف — الصورة تترفع فورًا؛ تظهر فورًا لو full_permissions، وإلا بعد موافقة
-// الأدمن (Change Request)
-async function vendorImageCR(req, res, field, opts) {
-  if (req.staff.role !== 'vendor_owner') return fail(res, 403, 'FORBIDDEN', 'صلاحية غير كافية');
-  if (!req.file) return fail(res, 422, 'IMAGE_REQUIRED', 'الصورة مطلوبة');
-  const img = await saveImage(req.file, opts);
-  if (await hasFullPermissions(req.staff.vendor_id)) {
-    await db.query(`UPDATE vendors SET ${field} = $2, updated_at = now() WHERE id = $1`, [req.staff.vendor_id, img.url]);
-    return res.json({ success: true, url: img.url });
-  }
-  const cur = (await db.query(`SELECT ${field} FROM vendors WHERE id = $1`, [req.staff.vendor_id])).rows[0] || {};
-  const out = await submitChangeRequest({
-    vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
-    entityType: 'vendor', entityId: req.staff.vendor_id, action: 'update',
-    currentValues: { [field]: cur[field] || null }, newValues: { [field]: img.url },
-  });
-  res.status(202).json({ ...out, url: img.url });
-}
-router.post('/profile/logo', vendorRole, imageUpload, (req, res, next) =>
-  vendorImageCR(req, res, 'logo', { folder: 'vendors', width: 512 }).catch(next));
-router.post('/profile/cover', vendorRole, imageUpload, (req, res, next) =>
-  vendorImageCR(req, res, 'cover_image', { folder: 'vendors', width: 1600 }).catch(next));
+// لوجو/غلاف المتجر: التاجر مالوش صلاحية يغيّرهم خالص (ولا حتى Change Request) —
+// الأدمن بس اللي بيحطهم وقت إنشاء الحساب أو بعد كده (POST /admin/vendors/:id/logo|cover).
 
 // مواعيد العمل — فوري (مش من الحقول الحسّاسة افتراضيًا)
 router.put('/profile/working-hours', vendorRole, async (req, res, next) => {
