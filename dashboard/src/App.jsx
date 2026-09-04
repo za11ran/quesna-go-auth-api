@@ -7,6 +7,11 @@ import Soon from './pages/Soon';
 import Overview from './pages/admin/Overview';
 import ChangeRequests from './pages/admin/ChangeRequests';
 import Vendors from './pages/admin/Vendors';
+import VendorProducts from './pages/vendor/Products';
+import VendorOrders from './pages/vendor/Orders';
+import VendorOffers from './pages/vendor/Offers';
+import VendorProfile from './pages/vendor/Profile';
+import VendorChangeRequests from './pages/vendor/VendorChangeRequests';
 
 const HOME = {
   admin: '/admin', dispatcher: '/dispatch',
@@ -42,11 +47,11 @@ export default function App() {
         <Route path="/dispatch/drivers" element={<Soon title="الدليفري" />} />
 
         {/* vendor */}
-        <Route path="/vendor" element={<Soon title="طلبات المتجر" />} />
-        <Route path="/vendor/products" element={<Soon title="المنتجات" />} />
-        <Route path="/vendor/offers" element={<Soon title="العروض" />} />
-        <Route path="/vendor/profile" element={<Soon title="بيانات المتجر" />} />
-        <Route path="/vendor/change-requests" element={<Soon title="طلبات التغيير" />} />
+        <Route path="/vendor" element={<VendorOrders />} />
+        <Route path="/vendor/products" element={<VendorProducts />} />
+        <Route path="/vendor/offers" element={<VendorOffers />} />
+        <Route path="/vendor/profile" element={<VendorProfile />} />
+        <Route path="/vendor/change-requests" element={<VendorChangeRequests />} />
 
         {/* driver */}
         <Route path="/driver" element={<Soon title="طلباتي" />} />
