@@ -92,6 +92,31 @@ https://api.quesnago.com/api/villages
 
 ---
 
+## 4b) صفحة الهبوط على `quesnago.com` (اختياري)
+
+صفحة تعريفية للتطبيق + أزرار تحميل + زر «دخول التجّار» يحوّل للوحة التحكم.
+الملفات في `landing/` وتُقدَّم من نفس الـ VPS.
+
+1. **DNS** عند هوستنجر — خلّي الجذر يشاور على السيرفر:
+
+   | Type | Name | Value |
+   |------|------|-------|
+   | A    | `@`   | `SERVER_IP` (بدّل `2.57.91.91` القديم) |
+   | A    | `www` | `SERVER_IP` (أو CNAME `www` → `quesnago.com`) |
+
+2. على السيرفر:
+   ```bash
+   cd /opt/qg && git pull && sudo bash deploy/setup-landing.sh
+   ```
+3. HTTPS:
+   ```bash
+   sudo certbot --nginx -d quesnago.com -d www.quesnago.com --agree-tos -m m.s.za11ran@gmail.com --redirect
+   ```
+4. تعديل الصفحة لاحقًا: عدّل `landing/index.html` → `git push` → على السيرفر `cd /opt/qg && git pull`
+   (Nginx يقدّمها مباشرة، مش محتاج build). حدّث روابط App Store / Google Play في قسم `id="download"`.
+
+---
+
 ## 5) باك أب يومي
 
 ```bash
