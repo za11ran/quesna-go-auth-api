@@ -166,6 +166,10 @@ CREATE TABLE IF NOT EXISTS vendors (
     updated_at            TIMESTAMPTZ  NOT NULL DEFAULT now(),
     deleted_at            TIMESTAMPTZ
 );
+-- 'app'    = الطلب يوصل لتطبيق التاجر، هو اللي بيقبله/يجهّزه بنفسه (الافتراضي).
+-- 'manual' = المتجر مالوش تطبيق بيستخدمه؛ الطلب يتخصم مخزونه فورًا ويروح على طول
+--            لطابور التوزيع، والمشرف هو اللي بيتصل بالمطعم تليفونيًا ويبعت الدليفري.
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS order_mode VARCHAR(10) NOT NULL DEFAULT 'app';
 CREATE INDEX IF NOT EXISTS idx_vendors_type   ON vendors(type) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_vendors_status ON vendors(status);
 
@@ -380,6 +384,10 @@ CREATE TABLE IF NOT EXISTS order_vendors (
     delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0,
     PRIMARY KEY (order_id, vendor_id)
 );
+-- لقطة من vendors.order_mode/phone وقت الطلب — يستخدمها المشرف في طابور
+-- التوزيع لمعرفة إن كان لازم يتصل بالمطعم تليفونيًا (متجر 'manual').
+ALTER TABLE order_vendors ADD COLUMN IF NOT EXISTS order_mode   VARCHAR(10) NOT NULL DEFAULT 'app';
+ALTER TABLE order_vendors ADD COLUMN IF NOT EXISTS vendor_phone VARCHAR(20);
 
 CREATE TABLE IF NOT EXISTS order_items (
     id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

@@ -14,6 +14,12 @@ export default function Vendors() {
     finally { setBusyId(null); }
   }
 
+  async function setOrderMode(id, mode) {
+    setBusyId(id);
+    try { await api.put(`/api/admin/vendors/${id}/order-mode`, { order_mode: mode }); reload(); }
+    finally { setBusyId(null); }
+  }
+
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -26,10 +32,10 @@ export default function Vendors() {
       <ErrBox error={error} />
       <div className="card" style={{ overflow: 'auto' }}>
         <table>
-          <thead><tr><th>المعرّف</th><th>الاسم</th><th>النوع</th><th>الحالة</th><th>مفتوح؟</th><th>رسوم/حد أدنى</th><th></th></tr></thead>
+          <thead><tr><th>المعرّف</th><th>الاسم</th><th>النوع</th><th>الحالة</th><th>مفتوح؟</th><th>رسوم/حد أدنى</th><th>استلام الطلبات</th><th></th></tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={7} className="empty">تحميل…</td></tr>
-              : rows.length === 0 ? <tr><td colSpan={7}><Empty /></td></tr>
+            {loading ? <tr><td colSpan={8} className="empty">تحميل…</td></tr>
+              : rows.length === 0 ? <tr><td colSpan={8}><Empty /></td></tr>
               : rows.map((v) => (
                 <tr key={v.id}>
                   <td>{v.id}</td>
@@ -38,6 +44,17 @@ export default function Vendors() {
                   <td><Pill tone={statusTone(v.status)}>{v.status}</Pill></td>
                   <td>{v.is_open ? '✓' : '✕'}</td>
                   <td>{Number(v.delivery_fee)} / {Number(v.min_order)}</td>
+                  <td>
+                    <select
+                      className="btn sm"
+                      value={v.order_mode || 'app'}
+                      disabled={busyId === v.id}
+                      onChange={(e) => setOrderMode(v.id, e.target.value)}
+                    >
+                      <option value="app">من تطبيق التاجر</option>
+                      <option value="manual">يدوي (تليفون)</option>
+                    </select>
+                  </td>
                   <td className="row">
                     {v.status !== 'approved' && (
                       <button className="btn sm ok" disabled={busyId === v.id} onClick={() => act(v.id, 'approve')}>موافقة</button>

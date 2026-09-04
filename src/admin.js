@@ -235,6 +235,26 @@ router.post('/vendors/:id/suspend', adminOnly, async (req, res, next) => {
   }
 });
 
+// نوع استلام الطلبات: 'app' (المتجر بيقبل الطلب من لوحته بنفسه) أو 'manual'
+// (مفيش لوحة للمتجر ده — الطلب يتخصم مخزونه فورًا ويروح لطابور التوزيع على طول،
+// والمشرف هو اللي بيتصل بالمطعم تليفونيًا). شوف orders.js/POST-orders.
+router.put('/vendors/:id/order-mode', adminOnly, async (req, res, next) => {
+  try {
+    const mode = String((req.body || {}).order_mode || '');
+    if (!['app', 'manual'].includes(mode)) {
+      return fail(res, 422, 'INVALID_ORDER_MODE', 'order_mode لازم يكون app أو manual');
+    }
+    const r = await db.query(
+      `UPDATE vendors SET order_mode = $2, updated_at = now() WHERE id = $1 RETURNING id, order_mode`,
+      [req.params.id, mode]
+    );
+    if (!r.rowCount) return fail(res, 404, 'VENDOR_NOT_FOUND', 'المتجر غير موجود');
+    res.json({ success: true, order_mode: r.rows[0].order_mode });
+  } catch (e) {
+    next(e);
+  }
+});
+
 /* -------- products list (لاختيار الأكثر طلبًا) -------- */
 router.get('/products', adminOnly, async (req, res, next) => {
   try {

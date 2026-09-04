@@ -39,6 +39,11 @@ export default function DispatchQueue() {
                 {o.vendors.map((v) => v.vendor_name).join('، ')} → {o.customer?.name}<br />
                 {o.address_text} · <Money v={o.total} />
               </p>
+              {o.vendors.filter((v) => v.order_mode === 'manual').map((v) => (
+                <p key={v.vendor_id} className="err" style={{ margin: '0 0 6px' }}>
+                  📞 اتصل بـ {v.vendor_name}{v.vendor_phone ? ` — ${v.vendor_phone}` : ''} لتأكيد الطلب
+                </p>
+              ))}
               {o.driver
                 ? <div className="row" style={{ justifyContent: 'space-between' }}>
                     <span>الدليفري: <strong>{o.driver.name}</strong> ({o.driver.phone})</span>

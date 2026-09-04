@@ -50,6 +50,7 @@ function serializeOrder(bundle) {
     vendors: vendors.map((v) => ({
       vendor_id: v.vendor_id, vendor_name: v.vendor_name,
       subtotal: n2(v.subtotal), delivery_fee: n2(v.delivery_fee),
+      order_mode: v.order_mode || 'app', vendor_phone: v.vendor_phone || null,
     })),
     driver: serializeDriver(driver),
     dispatcher_id: o.dispatcher_id || null,

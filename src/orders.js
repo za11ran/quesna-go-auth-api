@@ -50,7 +50,8 @@ router.post('/orders', authRequired, async (req, res, next) => {
     const pPlaceholders = productIds.map((_, i) => `$${i + 1}`).join(', ');
     const prodRes = await db.query(
       `SELECT p.*, v.name_ar AS v_name_ar, v.name_en AS v_name_en, v.delivery_fee, v.min_order,
-              v.is_open, v.is_active, v.status AS v_status, v.deleted_at AS v_deleted
+              v.is_open, v.is_active, v.status AS v_status, v.deleted_at AS v_deleted,
+              v.order_mode AS v_order_mode, v.phone AS v_phone
          FROM products p JOIN vendors v ON v.id = p.vendor_id
         WHERE p.id IN (${pPlaceholders}) AND p.deleted_at IS NULL`,
       productIds
@@ -144,6 +145,8 @@ router.post('/orders', authRequired, async (req, res, next) => {
         note: raw.note ? String(raw.note).slice(0, 300) : null,
         delivery_fee: Number(p.delivery_fee) || 0,
         min_order: Number(p.min_order) || 0,
+        order_mode: p.v_order_mode || 'app',
+        vendor_phone: p.v_phone || null,
       });
     }
 
@@ -153,6 +156,7 @@ router.post('/orders', authRequired, async (req, res, next) => {
       const a = (vendorAgg[l.vendor_id] ||= {
         vendor_id: l.vendor_id, vendor_name: l.vendor_name, subtotal: 0,
         delivery_fee: l.delivery_fee, min_order: l.min_order,
+        order_mode: l.order_mode, vendor_phone: l.vendor_phone,
       });
       a.subtotal = n2(a.subtotal + l.line_total);
     }
@@ -227,9 +231,9 @@ router.post('/orders', authRequired, async (req, res, next) => {
     }
     for (const a of Object.values(vendorAgg)) {
       await client.query(
-        `INSERT INTO order_vendors (order_id, vendor_id, vendor_name, subtotal, delivery_fee)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [orderId, a.vendor_id, a.vendor_name, a.subtotal, a.delivery_fee]
+        `INSERT INTO order_vendors (order_id, vendor_id, vendor_name, subtotal, delivery_fee, order_mode, vendor_phone)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [orderId, a.vendor_id, a.vendor_name, a.subtotal, a.delivery_fee, a.order_mode, a.vendor_phone]
       );
     }
     for (const l of lines) {
@@ -245,12 +249,54 @@ router.post('/orders', authRequired, async (req, res, next) => {
       `INSERT INTO order_status_history (order_id, status, by_role) VALUES ($1,'pending','customer')`,
       [orderId]
     );
+
+    // متاجر "يدوي" (بدون تطبيق تاجر) — الطلب مالوش حد يقبله من لوحة تاجر، فبيتخصم
+    // مخزونه فورًا وبيتحوّل على طول لجاهز للاستلام، عشان يظهر في طابور التوزيع
+    // والمشرف هو اللي هيتصل بالمطعم تليفونيًا ويبعت الدليفري (بدل خطوة "قبول" التاجر).
+    // لو السلة فيها متجر "app" واحد على الأقل، سيبها تمشي بالتدفّق العادي عادي.
+    const allManual = Object.values(vendorAgg).every((a) => a.order_mode === 'manual');
+    if (allManual) {
+      for (const l of lines) {
+        const qty = Number(l.quantity);
+        if (l.option_id) {
+          await client.query(
+            `UPDATE product_options SET stock = stock - $3::int
+               WHERE product_id = $1 AND id = $2 AND stock IS NOT NULL AND stock >= $3::int`,
+            [l.product_id, l.option_id, qty]
+          );
+        }
+        await client.query(
+          `UPDATE products SET stock = stock - $2::int
+             WHERE id = $1 AND stock IS NOT NULL AND stock >= $2::int`,
+          [l.product_id, qty]
+        );
+      }
+      await client.query(
+        `UPDATE orders SET status = 'ready_for_pickup', stock_deducted = true,
+                accepted_at = now(), ready_at = now(), updated_at = now()
+          WHERE id = $1`,
+        [orderId]
+      );
+      await client.query(
+        `INSERT INTO order_status_history (order_id, status, by_role)
+         VALUES ($1,'accepted','system'), ($1,'ready_for_pickup','system')`,
+        [orderId]
+      );
+    }
+
     await client.query('COMMIT');
 
     const m = msg('order_placed', lang, orderId);
     await notify(req.user.sub, { ...m, type: 'order_placed', orderId });
-    // إشعار لحظي للتجّار المعنيين + المشرفين
-    for (const vid of Object.keys(vendorAgg)) emitTo(`vendor:${vid}`, 'order:new', { order_id: orderId });
+
+    if (allManual) {
+      emitTo(`customer:${req.user.sub}`, 'order:update', { order_id: orderId, status: 'ready_for_pickup' });
+      emitTo('role:dispatcher', 'dispatch:needs_assignment', { order_id: orderId });
+      emitTo('role:admin', 'dispatch:needs_assignment', { order_id: orderId });
+    } else {
+      // إشعار لحظي للتجّار المعنيين (التدفّق العادي: التاجر بيقبل من تطبيقه)
+      for (const vid of Object.keys(vendorAgg)) emitTo(`vendor:${vid}`, 'order:new', { order_id: orderId });
+    }
 
     const bundle = await loadOrder(orderId);
     res.status(201).json(serializeOrder(bundle));
