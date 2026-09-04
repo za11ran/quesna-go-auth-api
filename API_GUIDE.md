@@ -37,7 +37,11 @@
 > **مؤقت لحد ما نشترك في مزوّد SMS:** الكود الثابت **`123456`** بيشتغل لأي حساب في `verify-otp`،
 > وكمان بيرجع في رد `register`/`login`/`resend` كـ `dev_otp`. (مضبوط بمتغيّر البيئة `DEV_LOGIN_OTP` على السيرفر — هيتشال بعد ربط الـ SMS.)
 5. `GET /api/auth/me` · `PATCH /api/auth/me` (form-data، كل الحقول اختيارية: `name, avatar_url, email, birth_date, gender, village_id, lang`).
-6. قائمة القرى لقائمة التسجيل: `GET /api/villages`.
+6. `POST /api/auth/me/avatar` — رفع صورة البروفايل مباشرة (multipart، حقل `image`) → بترجّع البروفايل كامل بعد التحديث. فوري بدون موافقة إدارة.
+7. قائمة القرى لقائمة التسجيل **+ أسعار التوصيل**: `GET /api/villages` → `{ villages: [{ id, key, name, governorate, delivery_base_fee }], extra_vendor_fee }`.
+   السلة لازم تحسب معاينة التوصيل بنفس المعادلة اللي بيحسبها السيرفر فعليًا وقت الطلب:
+   `إجمالي التوصيل = delivery_base_fee (قرية العميل) + extra_vendor_fee × (عدد المتاجر المختلفة في السلة - 1)`.
+   القيمتين قابلتين للتعديل من لوحة الأدمن، فلازم التطبيق يجيبهم من الـ API مش يثبّتهم محليًا.
 
 ---
 

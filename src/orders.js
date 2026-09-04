@@ -19,6 +19,7 @@ const {
   computeDiscount: computeCouponDiscount,
   COUPON_MESSAGES,
 } = require('./coupons');
+const { computeDeliveryTotal } = require('./deliveryPricing');
 
 const { langOf } = require('./lang'); // هيدر LANG أو ?lang= (ar|en)
 const fail = (res, status, code, message) =>
@@ -161,7 +162,17 @@ router.post('/orders', authRequired, async (req, res, next) => {
     }
 
     const subtotal = n2(Object.values(vendorAgg).reduce((s, a) => s + a.subtotal, 0));
-    const deliveryTotal = n2(Object.values(vendorAgg).reduce((s, a) => s + a.delivery_fee, 0));
+
+    // رسوم التوصيل: سعر أساسي حسب قرية العميل + رسوم إضافية لكل متجر زيادة عن
+    // واحد — مش مجموع رسوم كل متجر (الأدمن بيتحكم في الاتنين من لوحته).
+    const customerRes = await db.query(`SELECT village_id FROM users WHERE id = $1`, [req.user.sub]);
+    const deliveryTotal = n2(
+      await computeDeliveryTotal({
+        villageId: customerRes.rows[0]?.village_id || null,
+        vendorCount: Object.keys(vendorAgg).length,
+      })
+    );
+
     const lineDiscountTotal = n2(lines.reduce((s, l) => s + Math.max(0, l.base_price - l.unit_price) * l.quantity, 0));
 
     // كود الخصم (اختياري) — يتحقق تاني هنا (مش بس وقت المعاينة) لأن الحالة

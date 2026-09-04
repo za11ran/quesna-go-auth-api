@@ -10,6 +10,7 @@ const NAV = {
     ['/admin/banners', 'البانرات'],
     ['/admin/coupons', 'أكواد الخصم'],
     ['/admin/most-requested', 'الأكثر طلبًا'],
+    ['/admin/delivery-pricing', 'أسعار التوصيل'],
     ['/admin/drivers', 'الدليفري'],
     ['/admin/dispatchers', 'المشرفين'],
     ['/admin/orders', 'الطلبات'],

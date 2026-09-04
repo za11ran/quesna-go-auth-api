@@ -7,6 +7,7 @@ const db = require('./db');
 const { normalizeEgyptPhone } = require('./phone');
 const { issueOtp, deliverOtp } = require('./otp');
 const { signToken, authRequired } = require('./auth');
+const { imageUpload, saveImage } = require('./upload');
 
 // يقرأ حقول الفورم من نوع multipart/form-data (تبويب form-data في Apidog)
 // بدون رفع ملفات. يشتغل جنب express.json و express.urlencoded.
@@ -476,6 +477,25 @@ router.patch('/me', authRequired, form, async (req, res, next) => {
       vals
     );
 
+    const { rows } = await db.query(PROFILE_SELECT, [req.user.sub]);
+    res.json({ success: true, user: shapeUser(rows[0]) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ---------------------------------------------------------------------------
+ * رفع صورة البروفايل        POST /api/auth/me/avatar   (multipart, حقل image)
+ * فوري — بدون موافقة إدارة (صورة العميل نفسه).
+ * ------------------------------------------------------------------------- */
+router.post('/me/avatar', authRequired, imageUpload, async (req, res, next) => {
+  try {
+    if (!req.file) return fail(res, 422, 'IMAGE_REQUIRED', 'الصورة مطلوبة');
+    const img = await saveImage(req.file, { folder: 'avatars', width: 512 });
+    await db.query(
+      `UPDATE users SET avatar_url = $1, updated_at = now() WHERE id = $2`,
+      [img.url, req.user.sub]
+    );
     const { rows } = await db.query(PROFILE_SELECT, [req.user.sub]);
     res.json({ success: true, user: shapeUser(rows[0]) });
   } catch (err) {

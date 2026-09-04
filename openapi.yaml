@@ -53,8 +53,9 @@ paths:
                 success: true
                 count: 47
                 villages:
-                  - { id: 1, key: "quesna", name: "قويسنا", governorate: "المنوفية" }
-                  - { id: 2, key: "quesna_al_balad", name: "قويسنا البلد", governorate: "المنوفية" }
+                  - { id: 1, key: "quesna", name: "قويسنا", governorate: "المنوفية", delivery_base_fee: 25 }
+                  - { id: 2, key: "quesna_al_balad", name: "قويسنا البلد", governorate: "المنوفية", delivery_base_fee: 25 }
+                extra_vendor_fee: 15
               schema:
                 type: object
                 properties:
@@ -69,6 +70,15 @@ paths:
                         key: { type: string, description: "slug ثابت — يمكن إرساله في register كـ village_key" }
                         name: { type: string }
                         governorate: { type: string }
+                        delivery_base_fee:
+                          type: number
+                          description: "سعر التوصيل الأساسي لعميل من القرية دي (قابل للتعديل من لوحة الأدمن)"
+                  extra_vendor_fee:
+                    type: number
+                    description: >
+                      رسوم إضافية ثابتة لكل متجر زيادة عن واحد في نفس الطلب (سلة
+                      من أكتر من متجر). إجمالي التوصيل = delivery_base_fee
+                      + extra_vendor_fee × (عدد المتاجر - 1).
 
   /api/auth/register:
     post:
@@ -361,6 +371,46 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
         '422':
           description: Invalid data / nothing to update
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/auth/me/avatar:
+    post:
+      tags: [Auth]
+      operationId: uploadAvatar
+      summary: Upload profile photo
+      description: >
+        Uploads and sets the current user's avatar immediately (no admin
+        approval needed — it's the customer's own photo). Requires a token.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image: { type: string, format: binary }
+      responses:
+        '200':
+          description: Updated, returns the full profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  user: { $ref: '#/components/schemas/User' }
+        '401':
+          description: Login required
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: Image required
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }

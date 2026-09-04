@@ -13,6 +13,7 @@ import Coupons from './pages/admin/Coupons';
 import MostRequested from './pages/admin/MostRequested';
 import Staff from './pages/admin/Staff';
 import AdminOrders from './pages/admin/Orders';
+import DeliveryPricing from './pages/admin/DeliveryPricing';
 
 import VendorProducts from './pages/vendor/Products';
 import VendorMenuSections from './pages/vendor/MenuSections';
@@ -51,6 +52,7 @@ export default function App() {
         <Route path="/admin/banners" element={<Banners />} />
         <Route path="/admin/coupons" element={<Coupons />} />
         <Route path="/admin/most-requested" element={<MostRequested />} />
+        <Route path="/admin/delivery-pricing" element={<DeliveryPricing />} />
         <Route path="/admin/drivers" element={<Staff kind="drivers" />} />
         <Route path="/admin/dispatchers" element={<Staff kind="dispatchers" />} />
         <Route path="/admin/orders" element={<AdminOrders />} />

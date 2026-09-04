@@ -53,6 +53,8 @@ CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id, purpose)
 
 -- ---------- قرى مركز قويسنا (نفس مفاتيح تطبيق العميل: key = slug ثابت) ----------
 ALTER TABLE villages ADD COLUMN IF NOT EXISTS key VARCHAR(60);
+-- سعر التوصيل الأساسي للقرية — الأدمن بيعدّله من لوحته (GET/PUT /api/admin/villages)
+ALTER TABLE villages ADD COLUMN IF NOT EXISTS delivery_base_fee NUMERIC(10,2) NOT NULL DEFAULT 25;
 -- فهرس فريد عادي: قيم NULL المتعددة مسموحة في Postgres، فالقرى القديمة (بدون key) ما بتتعارضش
 CREATE UNIQUE INDEX IF NOT EXISTS uq_villages_key ON villages (key);
 
@@ -485,7 +487,8 @@ CREATE TABLE IF NOT EXISTS app_settings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 INSERT INTO app_settings (key, value) VALUES
- ('approval_rules', '{"vendor_fields":["name_ar","name_en","delivery_fee","min_order","logo","cover_image"],"product_create":true,"product_update_fields":["name_ar","name_en","price","category","description_ar","description_en"],"product_delete":true,"product_options":true,"offers":true,"instant":["stock","is_available","is_open"]}')
+ ('approval_rules', '{"vendor_fields":["name_ar","name_en","delivery_fee","min_order","logo","cover_image"],"product_create":true,"product_update_fields":["name_ar","name_en","price","category","description_ar","description_en"],"product_delete":true,"product_options":true,"offers":true,"instant":["stock","is_available","is_open"]}'),
+ ('delivery_pricing', '{"extra_vendor_fee": 15}')
 ON CONFLICT (key) DO NOTHING;
 
 -- ---------- حسابات تجريبية ----------

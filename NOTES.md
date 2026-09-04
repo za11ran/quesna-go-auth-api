@@ -73,6 +73,19 @@
 4. تكميلي صغير: `/vendor/staff` CRUD، bulk-price، push فعلي عبر `user_devices` (FCM/OneSignal)، تقارير أعمق.
 
 ## تم مؤخرًا
+- **تسعير التوصيل حقيقي من لوحة الأدمن** (بدل مجموع رسوم كل متجر) — `src/deliveryPricing.js`:
+  إجمالي توصيل الطلب = `villages.delivery_base_fee` (سعر أساسي حسب قرية العميل، عمود جديد) +
+  `app_settings['delivery_pricing'].extra_vendor_fee` (رسوم ثابتة لكل متجر إضافي في نفس الطلب،
+  كانت 15 ج.م مضروبة في تطبيق Flutter، دلوقتي من السيرفر). `POST /api/orders` بيحسبها فعليًا كده.
+  لوحة الأدمن: صفحة **«أسعار التوصيل»** (`/admin/delivery-pricing`) — تعديل الرسوم العامة
+  (`GET/POST /api/admin/settings/delivery-pricing`) + تعديل سعر كل قرية على حدة
+  (`GET /api/admin/villages`, `PUT /api/admin/villages/:id`). `GET /api/villages` العام
+  بقى بيرجّع `delivery_base_fee` لكل قرية و`extra_vendor_fee` عام — التطبيق لازم يستخدمهم
+  بدل القيم الثابتة المحلية في `ShippingPricing` عشان معاينة السلة تطابق فعليًا اللي هيتحسب وقت الطلب.
+  عمود `vendors.delivery_fee` القديم فاضل في الجدول بس مش بيُستخدم في حساب إجمالي العميل تاني.
+- **رفع صورة البروفايل للعميل** — `POST /api/auth/me/avatar` (multipart، حقل `image`) فوري بدون Change
+  Request (صورة العميل نفسه مش صورة متجر). `PATCH /api/auth/me` أصلاً بيدعم `email`/`birth_date`/`gender`.
+
 - **أكواد الخصم (Coupons) حقيقية** — جدول `coupons` (الأدمن هو اللي بيكتب الكود من لوحته). عام: `POST /api/coupons/validate` (معاينة الخصم في السلة قبل الطلب). `POST /api/orders` بيقبل `coupon_code` اختياري، بيتحقق منه تاني، بيطبّق الخصم على `discount_total`/`total`، وبيزوّد `used_count` — كله جوه نفس الـ transaction. لوحة الأدمن: صفحة «أكواد الخصم» (CRUD كامل: نسبة/مبلغ ثابت، حد أدنى للطلب، أقصى عدد استخدام، فترة صلاحية).
 
 - **أقسام قائمة المطعم (Menu Sections)** — كانت ناقصة (اكتشفناها من مراجعة كود تطبيق Flutter اللي كان مستنيها). جدول `menu_sections` (لكل تاجر) + `products.menu_section_id`. عام: `GET /api/vendors/:id/menu-sections`. لوحة التاجر: `GET/POST/PUT/DELETE /api/vendor/menu-sections[/:id]` (فوري، بدون Change Request) + تعديل فوري لقسم أي منتج عبر `PATCH /vendor/products/:id { menu_section_id }`. الداش بورد: صفحة `MenuSections.jsx` تظهر لصاحب مطعم بس (زر من صفحة المنتجات).

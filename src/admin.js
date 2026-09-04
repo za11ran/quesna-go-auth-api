@@ -160,6 +160,48 @@ router.post('/settings/approval-rules', adminOnly, async (req, res, next) => {
   }
 });
 
+/* -------- تسعير التوصيل (سعر أساسي لكل قرية + رسوم لكل متجر إضافي) -------- */
+router.get('/settings/delivery-pricing', adminOnly, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`SELECT value FROM app_settings WHERE key = 'delivery_pricing'`);
+    res.json({ extra_vendor_fee: Number((rows[0]?.value || {}).extra_vendor_fee ?? 15) });
+  } catch (e) { next(e); }
+});
+
+router.post('/settings/delivery-pricing', adminOnly, async (req, res, next) => {
+  try {
+    const fee = num((req.body || {}).extra_vendor_fee);
+    if (fee === null || fee < 0) return fail(res, 422, 'INVALID_FEE', 'قيمة الرسوم غير صحيحة');
+    await db.query(
+      `INSERT INTO app_settings (key, value) VALUES ('delivery_pricing', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [JSON.stringify({ extra_vendor_fee: fee })]
+    );
+    res.json({ extra_vendor_fee: fee });
+  } catch (e) { next(e); }
+});
+
+/* -------- القرى: سعر التوصيل الأساسي لكل قرية -------- */
+router.get('/villages', adminOnly, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`SELECT * FROM villages ORDER BY id`);
+    res.json({ data: rows });
+  } catch (e) { next(e); }
+});
+
+router.put('/villages/:id', adminOnly, async (req, res, next) => {
+  try {
+    const fee = num((req.body || {}).delivery_base_fee);
+    if (fee === null || fee < 0) return fail(res, 422, 'INVALID_FEE', 'السعر غير صحيح');
+    const { rows } = await db.query(
+      `UPDATE villages SET delivery_base_fee = $1 WHERE id = $2 RETURNING *`,
+      [fee, req.params.id]
+    );
+    if (!rows.length) return fail(res, 404, 'VILLAGE_NOT_FOUND', 'القرية غير موجودة');
+    res.json(rows[0]);
+  } catch (e) { next(e); }
+});
+
 /* -------- vendors -------- */
 router.get('/vendors', adminOnly, async (req, res, next) => {
   try {
