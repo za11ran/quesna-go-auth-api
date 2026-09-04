@@ -244,7 +244,9 @@ router.put('/products/:id', vendorRole, async (req, res, next) => {
       }
     }
 
-    const allowed = ['name_ar', 'name_en', 'brand', 'description_ar', 'description_en', 'category', 'sort_order'];
+    // image هنا = التاجر لصق رابط صورة مباشرة. رفع ملف فعلي لسه من
+    // POST /products/:id/image (منفصل، بيرفع لسيرفرنا بدل ما ياخد رابط جاهز).
+    const allowed = ['name_ar', 'name_en', 'brand', 'description_ar', 'description_en', 'category', 'sort_order', 'image'];
     const changes = {};
     for (const k of allowed) {
       if (b[k] === undefined) continue;
@@ -334,6 +336,7 @@ router.post('/products', vendorRole, async (req, res, next) => {
       description_en: b.description_en ? String(b.description_en) : '',
       price: num(b.price), category: b.category ? String(b.category) : null,
       menu_section_id: menuSectionId,
+      image: b.image ? String(b.image) : null,
       stock: b.stock === undefined || b.stock === null ? null : parseInt(b.stock, 10),
       is_available: b.is_available !== false, has_options: !!options,
       sort_order: num(b.sort_order) || 0,

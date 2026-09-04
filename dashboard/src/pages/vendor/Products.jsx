@@ -112,7 +112,7 @@ function ImgBtn({ id, onDone }) {
 }
 
 function EditProduct({ p, isRestaurant, onClose, onDone }) {
-  const [f, setF] = useState({ name_ar: p.name_ar, name_en: p.name_en, price: p.price, category: p.category || 'other', description_ar: p.description_ar || '' });
+  const [f, setF] = useState({ name_ar: p.name_ar, name_en: p.name_en, price: p.price, category: p.category || 'other', description_ar: p.description_ar || '', image: p.image || '' });
   const [opts, setOpts] = useState(p.options || []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -130,6 +130,8 @@ function EditProduct({ p, isRestaurant, onClose, onDone }) {
     } catch (e) { setError(e); } finally { setBusy(false); }
   }
 
+  const imgPreview = f.image ? (f.image.startsWith('http') ? f.image : apiBase + f.image) : null;
+
   return (
     <Modal title={`تعديل: ${p.name_ar}`} onClose={onClose}
       footer={<button className="btn primary" disabled={busy} onClick={submit}>إرسال للمراجعة</button>}>
@@ -138,6 +140,12 @@ function EditProduct({ p, isRestaurant, onClose, onDone }) {
         <Field label="الاسم (عربي)"><input value={f.name_ar} onChange={set('name_ar')} /></Field>
         <Field label="الاسم (إنجليزي)"><input value={f.name_en} onChange={set('name_en')} /></Field>
       </div>
+      <Field label="رابط الصورة">
+        <div className="row" style={{ gap: 8 }}>
+          {imgPreview && <img src={imgPreview} alt="" width={36} height={36} style={{ borderRadius: 8, objectFit: 'cover' }} />}
+          <input value={f.image} onChange={set('image')} placeholder="https://..." style={{ flex: 1 }} />
+        </div>
+      </Field>
       {!hasOptions && (
         isRestaurant ? (
           <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>
@@ -163,7 +171,7 @@ function EditProduct({ p, isRestaurant, onClose, onDone }) {
 }
 
 function CreateProduct({ isRestaurant, sections, onClose, onDone }) {
-  const [f, setF] = useState({ name_ar: '', name_en: '', price: '', category: 'other', menu_section_id: '', stock: '', description_ar: '' });
+  const [f, setF] = useState({ name_ar: '', name_en: '', price: '', category: 'other', menu_section_id: '', stock: '', description_ar: '', image: '' });
   const [opts, setOpts] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -194,6 +202,9 @@ function CreateProduct({ isRestaurant, sections, onClose, onDone }) {
         <Field label="الاسم (عربي)"><input value={f.name_ar} onChange={set('name_ar')} /></Field>
         <Field label="الاسم (إنجليزي)"><input value={f.name_en} onChange={set('name_en')} /></Field>
       </div>
+      <Field label="رابط الصورة (اختياري — أو ارفع صورة بعد الإنشاء)">
+        <input value={f.image} onChange={set('image')} placeholder="https://..." />
+      </Field>
       <div className={hasOptions ? 'grid k2' : 'grid k3'}>
         {!hasOptions && <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>}
         <Field label="الكمية (فاضي = غير محدود)"><input type="number" value={f.stock} onChange={set('stock')} /></Field>
