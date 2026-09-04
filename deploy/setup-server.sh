@@ -59,9 +59,14 @@ sudo -u postgres psql -c "ALTER ROLE $DB_USER WITH PASSWORD '$DB_PASS';"
 sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1 \
   || sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
 
-echo "==> [7/9] تثبيت التطبيق + الجداول"
+echo "==> [7/9] تثبيت التطبيق + الجداول + بناء الداش بورد"
 cd "$APP_DIR"
 npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+if [[ -d "$APP_DIR/dashboard" ]]; then
+  ( cd "$APP_DIR/dashboard"
+    npm ci 2>/dev/null || npm install
+    VITE_API_URL="" npm run build )    # نفس الأصل: /api و /socket.io و /uploads
+fi
 if [[ ! -f "$ENV_FILE" ]]; then
   cat > "$ENV_FILE" <<EOF
 PORT=$APP_PORT
@@ -95,11 +100,17 @@ server {
     server_name $DOMAIN;
     client_max_body_size 12M;
 
+    # الداش بورد (ملفات ثابتة) على الجذر
+    root $APP_DIR/dashboard/dist;
+    index index.html;
     location / {
+        try_files \$uri /index.html;
+    }
+
+    # الـ API
+    location /api/ {
         proxy_pass http://127.0.0.1:$APP_PORT;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -107,7 +118,17 @@ server {
         proxy_read_timeout 60s;
     }
 
-    # الصور المرفوعة تتقدّم من Nginx مباشرة
+    # Socket.IO (WebSocket)
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:$APP_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_read_timeout 3600s;
+    }
+
+    # الصور المرفوعة
     location /uploads/ {
         alias $APP_DIR/uploads/;
         access_log off;

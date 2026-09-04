@@ -1,7 +1,15 @@
-# نشر Quesna Go API على VPS (Ubuntu 24)
+# نشر Quesna Go على VPS (Ubuntu 24)
 
 السيرفر: 4GB RAM / 2 vCPU / Ubuntu 24 — كفاية للبداية.
-هيشتغل عليه: Node API (PM2) + PostgreSQL + Nginx + HTTPS.
+هيشتغل عليه: Node API + Socket.IO (PM2) + PostgreSQL + **الداش بورد (React مبني)** + Nginx + HTTPS.
+
+بعد التشغيل، من الدومين:
+- `https://api.quesnago.com/` → **الداش بورد** (دخول أدمن/مشرف/تاجر/دليفري)
+- `https://api.quesnago.com/api/...` → الـ API (للتطبيق والداش بورد)
+- `https://api.quesnago.com/uploads/...` → الصور
+- `wss://api.quesnago.com/socket.io/` → الإشعارات اللحظية
+
+`deploy/setup-server.sh` بيبني الداش بورد تلقائيًا. للتحديث بعد أي push: `bash deploy/update.sh`.
 
 ---
 

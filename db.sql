@@ -190,6 +190,11 @@ CREATE TABLE IF NOT EXISTS offers (
 CREATE INDEX IF NOT EXISTS idx_offers_vendor ON offers(vendor_id);
 
 -- ---------- بيانات تجريبية ----------
+-- إزالة أي تكرار سابق (لو db:setup اتشغّل قبل إضافة القيد) ثم قيد فريد
+DELETE FROM categories a USING categories b
+  WHERE a.id > b.id AND a.name_ar = b.name_ar AND COALESCE(a.action,'') = COALESCE(b.action,'');
+CREATE UNIQUE INDEX IF NOT EXISTS uq_categories_key ON categories (name_ar, (COALESCE(action, '')));
+
 INSERT INTO categories (name_ar, name_en, type, action, sort_order) VALUES
  ('مطاعم',      'Restaurants',  'vendors', 'restaurants',  1),
  ('سوبر ماركت', 'Supermarkets', 'vendors', 'supermarkets', 2),

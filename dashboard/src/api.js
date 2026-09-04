@@ -1,5 +1,7 @@
 // عميل الـ API للوحة التحكم
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+// VITE_API_URL: اتركه فاضيًا لو الداش بورد والـ API على نفس الأصل (الإنتاج)،
+// أو حطّ رابط الـ API كاملًا وقت التطوير (http://localhost:4000).
+const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
 export const apiBase = BASE;
 export const getToken = () => localStorage.getItem('qg_token') || '';

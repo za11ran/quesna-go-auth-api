@@ -4,8 +4,12 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 echo "==> git pull"
 git pull --ff-only
-echo "==> تثبيت الحزم"
+echo "==> تثبيت حزم الـ API"
 npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+if [[ -d dashboard ]]; then
+  echo "==> بناء الداش بورد"
+  ( cd dashboard && (npm ci 2>/dev/null || npm install) && VITE_API_URL="" npm run build )
+fi
 echo "==> تحديث قاعدة البيانات (migrations)"
 npm run db:setup
 echo "==> إعادة تشغيل"
