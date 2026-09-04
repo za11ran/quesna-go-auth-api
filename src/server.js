@@ -47,5 +47,9 @@ require('./worker').start();                  // عامل مهلة عروض ال
 const port = process.env.PORT || 4000;
 server.listen(port, () => {
   console.log(`\n✅ الـ API شغّال على: http://localhost:${port}`);
-  console.log(`   وضع التشغيل: ${process.env.NODE_ENV || 'development'}\n`);
+  console.log(`   وضع التشغيل: ${process.env.NODE_ENV || 'development'}`);
+  if (process.env.DEV_LOGIN_OTP) {
+    console.log(`   ⚠️  DEV_LOGIN_OTP مُفعّل — أي حساب يقبل الكود «${process.env.DEV_LOGIN_OTP}». احذفه بعد ربط الـ SMS.`);
+  }
+  console.log('');
 });

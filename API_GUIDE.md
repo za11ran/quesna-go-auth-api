@@ -33,6 +33,9 @@
 3. `POST /api/auth/verify-otp` — form-data: `phone`, `code` → بيرجّع `{ token, user }`.
    `user` فيه: `id, name, phone, email, avatar_url, birth_date, gender, lang, village_id, village_name, status, created_at, is_new`.
 4. `POST /api/auth/resend-otp` — form-data: `phone`.
+
+> **مؤقت لحد ما نشترك في مزوّد SMS:** الكود الثابت **`123456`** بيشتغل لأي حساب في `verify-otp`،
+> وكمان بيرجع في رد `register`/`login`/`resend` كـ `dev_otp`. (مضبوط بمتغيّر البيئة `DEV_LOGIN_OTP` على السيرفر — هيتشال بعد ربط الـ SMS.)
 5. `GET /api/auth/me` · `PATCH /api/auth/me` (form-data، كل الحقول اختيارية: `name, avatar_url, email, birth_date, gender, village_id, lang`).
 6. قائمة القرى لقائمة التسجيل: `GET /api/villages`.
 

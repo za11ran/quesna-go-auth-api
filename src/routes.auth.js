@@ -22,7 +22,11 @@ const authLimiter = rateLimit({
 });
 
 const isDev = () => process.env.NODE_ENV !== 'production';
-const withDevOtp = (body, code) => (isDev() ? { ...body, dev_otp: code } : body);
+// يرجّع dev_otp في الرد أثناء التطوير، أو الكود الثابت المؤقت لو DEV_LOGIN_OTP متضبّط.
+const withDevOtp = (body, code) => {
+  if (process.env.DEV_LOGIN_OTP) return { ...body, dev_otp: String(process.env.DEV_LOGIN_OTP) };
+  return isDev() ? { ...body, dev_otp: code } : body;
+};
 
 // رد خطأ موحّد: يحمل error_code ثابت (للتطبيق) + رسالة عربية (للتشخيص).
 // التطبيق (عربي/إنجليزي) يترجم error_code عنده — مش بيعتمد على نص الـ error.
@@ -271,7 +275,11 @@ router.post('/verify-otp', authLimiter, form, async (req, res, next) => {
       return fail(res, 429, 'OTP_TOO_MANY_ATTEMPTS', 'حاولت كثيرًا، اطلب كود جديد');
     }
 
-    const ok = await bcrypt.compare(String(code), token.token_hash);
+    // كود ثابت مؤقت للتجربة اليدوية لحد ما نشترك في مزوّد SMS.
+    // فعّله بمتغيّر البيئة DEV_LOGIN_OTP=123456 — واحذفه بعد ربط الـ SMS.
+    const masterOtp =
+      !!process.env.DEV_LOGIN_OTP && String(code) === String(process.env.DEV_LOGIN_OTP);
+    const ok = masterOtp || (await bcrypt.compare(String(code), token.token_hash));
     if (!ok) {
       await db.query('UPDATE auth_tokens SET attempts = attempts + 1 WHERE id = $1', [token.id]);
       const left = Math.max(0, maxAttempts - (token.attempts + 1));

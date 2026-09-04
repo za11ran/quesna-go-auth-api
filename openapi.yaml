@@ -8,6 +8,8 @@ info:
 
     Auth: register or login -> OTP code is sent -> verify-otp -> returns a JWT token.
     In development mode the code is also returned as dev_otp.
+    TEMP (until an SMS provider is connected): the fixed code 123456 is accepted for
+    any account on verify-otp, and is returned as dev_otp on register/login/resend.
     Send the token on every protected call as `Authorization: Bearer <token>`.
 
 
@@ -894,7 +896,9 @@ components:
         next: { type: string }
         dev_otp:
           type: string
-          description: Only present in development mode (NODE_ENV=development)
+          description: >
+            Present in development mode, or whenever the temporary fixed code is enabled
+            (server env DEV_LOGIN_OTP). Currently 123456.
 
     User:
       type: object

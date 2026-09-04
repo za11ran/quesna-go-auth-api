@@ -76,6 +76,8 @@ JWT_SECRET=$(openssl rand -hex 32)
 JWT_EXPIRES_IN=30d
 OTP_TTL_MINUTES=10
 OTP_MAX_ATTEMPTS=5
+# كود OTP ثابت مؤقت للتجربة اليدوية — احذفه بعد ربط الـ SMS
+DEV_LOGIN_OTP=123456
 UPLOADS_DIR=$APP_DIR/uploads
 DELIVERY_OFFER_TIMEOUT_SEC=60
 RESEND_API_KEY=
