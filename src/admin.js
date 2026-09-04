@@ -502,4 +502,80 @@ router.get('/reports', adminOnly, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* ================= أكواد الخصم (Coupons) ================= */
+router.get('/coupons', adminOnly, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`SELECT * FROM coupons ORDER BY created_at DESC`);
+    res.json({ data: rows });
+  } catch (e) { next(e); }
+});
+
+router.post('/coupons', adminOnly, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const code = String(b.code || '').trim().toUpperCase();
+    if (!code) return fail(res, 422, 'CODE_REQUIRED', 'كود الخصم مطلوب');
+    if (num(b.discount_value) === null) return fail(res, 422, 'DISCOUNT_VALUE_REQUIRED', 'قيمة الخصم مطلوبة');
+    try {
+      const { rows } = await db.query(
+        `INSERT INTO coupons (code, discount_type, discount_value, min_order_amount, max_uses, starts_at, ends_at, is_active)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        [
+          code,
+          b.discount_type === 'amount' ? 'amount' : 'percent',
+          num(b.discount_value),
+          num(b.min_order_amount) || 0,
+          b.max_uses === '' || b.max_uses == null ? null : parseInt(b.max_uses, 10),
+          b.starts_at || null,
+          b.ends_at || null,
+          b.is_active !== false,
+        ]
+      );
+      res.status(201).json(rows[0]);
+    } catch (e) {
+      if (e.code === '23505') return fail(res, 409, 'CODE_EXISTS', 'الكود ده مستخدم بالفعل');
+      throw e;
+    }
+  } catch (e) { next(e); }
+});
+
+router.put('/coupons/:id', adminOnly, async (req, res, next) => {
+  try {
+    const cur = (await db.query(`SELECT * FROM coupons WHERE id = $1`, [req.params.id])).rows[0];
+    if (!cur) return fail(res, 404, 'COUPON_NOT_FOUND', 'الكود غير موجود');
+    const b = req.body || {};
+    const code = b.code !== undefined && String(b.code).trim() ? String(b.code).trim().toUpperCase() : cur.code;
+    try {
+      const { rows } = await db.query(
+        `UPDATE coupons SET code=$1, discount_type=$2, discount_value=$3, min_order_amount=$4,
+                            max_uses=$5, starts_at=$6, ends_at=$7, is_active=$8
+          WHERE id = $9 RETURNING *`,
+        [
+          code,
+          b.discount_type === 'amount' ? 'amount' : (b.discount_type === 'percent' ? 'percent' : cur.discount_type),
+          b.discount_value !== undefined ? (num(b.discount_value) ?? cur.discount_value) : cur.discount_value,
+          b.min_order_amount !== undefined ? (num(b.min_order_amount) ?? 0) : cur.min_order_amount,
+          b.max_uses !== undefined ? (b.max_uses === '' || b.max_uses == null ? null : parseInt(b.max_uses, 10)) : cur.max_uses,
+          b.starts_at !== undefined ? (b.starts_at || null) : cur.starts_at,
+          b.ends_at !== undefined ? (b.ends_at || null) : cur.ends_at,
+          b.is_active !== undefined ? b.is_active !== false : cur.is_active,
+          req.params.id,
+        ]
+      );
+      res.json(rows[0]);
+    } catch (e) {
+      if (e.code === '23505') return fail(res, 409, 'CODE_EXISTS', 'الكود ده مستخدم بالفعل');
+      throw e;
+    }
+  } catch (e) { next(e); }
+});
+
+router.delete('/coupons/:id', adminOnly, async (req, res, next) => {
+  try {
+    const r = await db.query(`DELETE FROM coupons WHERE id = $1`, [req.params.id]);
+    if (!r.rowCount) return fail(res, 404, 'COUPON_NOT_FOUND', 'الكود غير موجود');
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

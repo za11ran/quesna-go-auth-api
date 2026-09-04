@@ -14,6 +14,11 @@ const { notify } = require('./notify');
 const { emitTo } = require('./realtime');
 const { loadOrder, serializeOrder, n2 } = require('./orderView');
 const { imagesUpload, saveImages } = require('./upload');
+const {
+  findValidCoupon,
+  computeDiscount: computeCouponDiscount,
+  COUPON_MESSAGES,
+} = require('./coupons');
 
 const { langOf } = require('./lang'); // هيدر LANG أو ?lang= (ar|en)
 const fail = (res, status, code, message) =>
@@ -157,8 +162,23 @@ router.post('/orders', authRequired, async (req, res, next) => {
 
     const subtotal = n2(Object.values(vendorAgg).reduce((s, a) => s + a.subtotal, 0));
     const deliveryTotal = n2(Object.values(vendorAgg).reduce((s, a) => s + a.delivery_fee, 0));
-    const discountTotal = n2(lines.reduce((s, l) => s + Math.max(0, l.base_price - l.unit_price) * l.quantity, 0));
-    const total = n2(subtotal + deliveryTotal);
+    const lineDiscountTotal = n2(lines.reduce((s, l) => s + Math.max(0, l.base_price - l.unit_price) * l.quantity, 0));
+
+    // كود الخصم (اختياري) — يتحقق تاني هنا (مش بس وقت المعاينة) لأن الحالة
+    // ممكن تتغيّر بين المعاينة والطلب الفعلي (كوبون خلص، انتهت صلاحيته...).
+    let couponCode = null, couponDiscount = 0;
+    if (body.coupon_code) {
+      const { coupon, error } = await findValidCoupon(body.coupon_code);
+      if (error) return fail(res, 422, error, COUPON_MESSAGES[error]);
+      if (subtotal < Number(coupon.min_order_amount)) {
+        return fail(res, 422, 'COUPON_MIN_ORDER_NOT_MET', `الحد الأدنى لاستخدام الكود ${Number(coupon.min_order_amount)} ج.م`);
+      }
+      couponDiscount = computeCouponDiscount(coupon, subtotal);
+      couponCode = coupon.code;
+    }
+
+    const discountTotal = n2(lineDiscountTotal + couponDiscount);
+    const total = n2(subtotal + deliveryTotal - couponDiscount);
 
     // العنوان (id أو نص)
     let addrId = null, addrText = body.address_text || null, addrLat = null, addrLng = null;
@@ -183,12 +203,17 @@ router.post('/orders', authRequired, async (req, res, next) => {
     await client.query(
       `INSERT INTO orders (id, customer_id, status, payment_method, payment_status,
                            address_id, address_text, address_lat, address_lng, notes,
-                           subtotal, delivery_total, discount_total, total)
-       VALUES ($1,$2,'pending',$3,'pending',$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+                           subtotal, delivery_total, discount_total, total,
+                           coupon_code, coupon_discount)
+       VALUES ($1,$2,'pending',$3,'pending',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [orderId, req.user.sub, paymentMethod, addrId, addrText, addrLat, addrLng,
        body.notes ? String(body.notes).slice(0, 500) : null,
-       subtotal, deliveryTotal, discountTotal, total]
+       subtotal, deliveryTotal, discountTotal, total,
+       couponCode, couponDiscount]
     );
+    if (couponCode) {
+      await client.query(`UPDATE coupons SET used_count = used_count + 1 WHERE UPPER(code) = UPPER($1)`, [couponCode]);
+    }
     for (const a of Object.values(vendorAgg)) {
       await client.query(
         `INSERT INTO order_vendors (order_id, vendor_id, vendor_name, subtotal, delivery_fee)

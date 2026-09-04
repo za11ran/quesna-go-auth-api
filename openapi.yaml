@@ -618,6 +618,7 @@ paths:
                 address_lat: { type: number, nullable: true }
                 address_lng: { type: number, nullable: true }
                 notes: { type: string, nullable: true }
+                coupon_code: { type: string, nullable: true, description: "اختياري — يتحقق منه السيرفر ويعيد استخدامه (POST /api/coupons/validate للمعاينة قبل الطلب)" }
                 items:
                   type: array
                   minItems: 1
@@ -637,7 +638,7 @@ paths:
           description: Vendor closed / product or option unavailable / out of stock
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
         '422':
-          description: Empty cart / product not found / min order not met / address required
+          description: Empty cart / product not found / min order not met / address required / invalid coupon
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
     get:
       tags: [Orders]
@@ -922,6 +923,42 @@ paths:
           description: token required
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
 
+  /api/coupons/validate:
+    post:
+      tags: [Orders]
+      operationId: validateCoupon
+      summary: Preview a coupon code's discount before placing the order
+      description: Doesn't redeem the code — just previews it. The code is re-validated and actually redeemed when POST /api/orders is called with the same `coupon_code`.
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: { code: "WELCOME10", subtotal: 120 }
+            schema:
+              type: object
+              required: [code, subtotal]
+              properties:
+                code: { type: string }
+                subtotal: { type: number, description: "السلة الحالية — لازم يستوفي الحد الأدنى ولحساب قيمة الخصم" }
+      responses:
+        '200':
+          description: Valid
+          content:
+            application/json:
+              example: { valid: true, code: "WELCOME10", discount_type: "percent", discount_value: 10, discount_amount: 12 }
+              schema:
+                type: object
+                properties:
+                  valid: { type: boolean }
+                  code: { type: string }
+                  discount_type: { type: string, enum: [percent, amount] }
+                  discount_value: { type: number }
+                  discount_amount: { type: number, description: "قيمة الخصم بالجنيه على الـ subtotal المُرسَل" }
+        '422':
+          description: "COUPON_NOT_FOUND / COUPON_EXPIRED / COUPON_NOT_STARTED / COUPON_USES_EXCEEDED / COUPON_MIN_ORDER_NOT_MET"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
 components:
   parameters:
     LangHeader:
@@ -1116,7 +1153,9 @@ components:
               properties: { lat: { type: number }, lng: { type: number }, updated_at: { type: string, format: date-time } }
         subtotal: { type: number }
         delivery_total: { type: number }
-        discount_total: { type: number }
+        discount_total: { type: number, description: "خصومات المنتجات + خصم كود الكوبون (لو فيه)" }
+        coupon_code: { type: string, nullable: true }
+        coupon_discount: { type: number }
         total: { type: number }
         payment_method: { type: string, enum: [cash, card, wallet] }
         payment_status: { type: string }

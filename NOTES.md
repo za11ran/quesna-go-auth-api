@@ -73,6 +73,8 @@
 4. تكميلي صغير: `/vendor/staff` CRUD، bulk-price، push فعلي عبر `user_devices` (FCM/OneSignal)، تقارير أعمق.
 
 ## تم مؤخرًا
+- **أكواد الخصم (Coupons) حقيقية** — جدول `coupons` (الأدمن هو اللي بيكتب الكود من لوحته). عام: `POST /api/coupons/validate` (معاينة الخصم في السلة قبل الطلب). `POST /api/orders` بيقبل `coupon_code` اختياري، بيتحقق منه تاني، بيطبّق الخصم على `discount_total`/`total`، وبيزوّد `used_count` — كله جوه نفس الـ transaction. لوحة الأدمن: صفحة «أكواد الخصم» (CRUD كامل: نسبة/مبلغ ثابت، حد أدنى للطلب، أقصى عدد استخدام، فترة صلاحية).
+
 - **أقسام قائمة المطعم (Menu Sections)** — كانت ناقصة (اكتشفناها من مراجعة كود تطبيق Flutter اللي كان مستنيها). جدول `menu_sections` (لكل تاجر) + `products.menu_section_id`. عام: `GET /api/vendors/:id/menu-sections`. لوحة التاجر: `GET/POST/PUT/DELETE /api/vendor/menu-sections[/:id]` (فوري، بدون Change Request) + تعديل فوري لقسم أي منتج عبر `PATCH /vendor/products/:id { menu_section_id }`. الداش بورد: صفحة `MenuSections.jsx` تظهر لصاحب مطعم بس (زر من صفحة المنتجات).
 
 - **مراجعة اللغة (ar/en) في كل مسارات العميل**: `src/lang.js` موحّد — `langOf(req)` بيقرأ هيدر `LANG` ثم `?lang=` ثم `body.lang` ثم `ar`. الكتالوج والطلبات بيستخدموه (الطلبات كانت بتقرأ الهيدر بس، دلوقتي بتقرأ الباراميتر كمان). إشعارات العميل بقت ثنائية اللغة `{ ar, en }` و`notify()` بيختار حسب `users.preferred_language` للعميل (مش لغة طلب الدليفري/التاجر). أُضيف إشعار **«طلبك جاهز»** عند `ready_for_pickup`. أخطاء الـ API عربي فقط **بالتصميم** — التطبيق بيترجم `error_code` بنفسه.

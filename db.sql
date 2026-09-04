@@ -351,6 +351,24 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id, placed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_status   ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_driver   ON orders(driver_id);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code     VARCHAR(40);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_discount NUMERIC(10,2) NOT NULL DEFAULT 0;
+
+-- ---------- أكواد الخصم (يديرها الأدمن من لوحته) ----------
+CREATE TABLE IF NOT EXISTS coupons (
+    id                SERIAL PRIMARY KEY,
+    code              VARCHAR(40) NOT NULL UNIQUE,
+    discount_type     VARCHAR(20) NOT NULL DEFAULT 'percent',  -- percent | amount
+    discount_value    NUMERIC(10,2) NOT NULL,
+    min_order_amount  NUMERIC(10,2) NOT NULL DEFAULT 0,
+    max_uses          INTEGER,                -- NULL = بلا حد
+    used_count        INTEGER NOT NULL DEFAULT 0,
+    starts_at         TIMESTAMPTZ,
+    ends_at           TIMESTAMPTZ,
+    is_active         BOOLEAN NOT NULL DEFAULT true,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_coupons_code ON coupons ((UPPER(code)));
 
 CREATE TABLE IF NOT EXISTS order_vendors (
     order_id     VARCHAR(30) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,

@@ -56,6 +56,8 @@ function serializeOrder(bundle) {
     subtotal: n2(o.subtotal),
     delivery_total: n2(o.delivery_total),
     discount_total: n2(o.discount_total),
+    coupon_code: o.coupon_code || null,
+    coupon_discount: n2(o.coupon_discount) || 0,
     total: n2(o.total),
     payment_method: o.payment_method,
     payment_status: o.payment_status,

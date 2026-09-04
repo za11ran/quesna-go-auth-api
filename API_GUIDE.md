@@ -71,6 +71,7 @@
   "payment_method": "cash",
   "address_id": 4,
   "notes": "الدور الثالث",
+  "coupon_code": "WELCOME10",
   "items": [
     { "product_id": 101, "quantity": 2, "option_id": 5, "note": "بدون بصل" },
     { "product_id": 210, "quantity": 1 }
@@ -88,6 +89,7 @@
 | `GET /api/orders/:id` | تفاصيل طلب (فيه `driver` + `driver.location` لو اتخصّص دليفري) |
 | `GET /api/orders/:id/receipt` | الرسيت |
 | `POST /api/orders/:id/cancel` | إلغاء — **بس طول ما الحالة `pending`** (قبل قبول المتجر) |
+| `POST /api/coupons/validate` | معاينة خصم كود قبل الطلب: `{code, subtotal}` → `{valid, discount_amount}`. الاستخدام الفعلي (وزيادة العدّاد) بيحصل تلقائيًا لو بعتّ نفس `coupon_code` في `POST /api/orders` |
 | `POST /api/orders/quick` | طلب سريع: multipart، `details` + `price` + `images` (حتى 5) |
 
 ### حالات الطلب (`status`)

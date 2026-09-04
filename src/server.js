@@ -22,6 +22,7 @@ app.use('/api/villages', require('./routes.villages'));
 app.use('/api/auth', require('./routes.auth'));
 app.use('/api', require('./catalog'));   // vendors, products, home/categories, offers
 app.use('/api', require('./orders'));    // orders, addresses, notifications, devices
+app.use('/api', require('./coupons').router); // معاينة كود الخصم
 app.use('/api/vendor', require('./vendor'));      // لوحة التاجر
 app.use('/api/admin', require('./admin'));        // لوحة الأدمن + مراجعة Change Requests
 app.use('/api/dispatch', require('./dispatch'));  // لوحة المشرف (التوزيع)
