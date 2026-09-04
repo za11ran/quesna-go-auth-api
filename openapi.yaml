@@ -551,6 +551,25 @@ paths:
                 properties:
                   data: { type: array, items: { $ref: '#/components/schemas/Product' } }
 
+  /api/products/on-offer:
+    get:
+      tags: [Catalog]
+      operationId: productsOnOffer
+      summary: Products currently discounted by an active offer
+      description: Ordered by biggest savings (EGP) first. Each item's `discount` field carries the computed price.
+      parameters:
+        - $ref: '#/components/parameters/LangHeader'
+        - { in: query, name: limit, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Product' } }
+
   /api/offers:
     get:
       tags: [Catalog]

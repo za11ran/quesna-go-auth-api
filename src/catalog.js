@@ -351,6 +351,50 @@ router.get('/products/most-requested', async (req, res, next) => {
   }
 });
 
+/* ---------------- GET /api/products/on-offer ---------------- */
+// منتجات عليها خصم فعّال دلوقتي (من عروض المتجر/القسم/المنتج) — للصفحة الرئيسية.
+router.get('/products/on-offer', async (req, res, next) => {
+  try {
+    const lang = langOf(req);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+    const offersRes = await db.query(
+      `SELECT o.* FROM offers o
+       JOIN vendors v ON v.id = o.vendor_id
+       WHERE o.is_active = true
+         AND (o.starts_at IS NULL OR o.starts_at <= now())
+         AND (o.ends_at   IS NULL OR o.ends_at   >= now())
+         AND v.deleted_at IS NULL AND v.is_active = true AND v.status = 'approved'`
+    );
+    const offersByVendor = {};
+    for (const off of offersRes.rows) (offersByVendor[off.vendor_id] ||= []).push(off);
+    const vendorIds = Object.keys(offersByVendor);
+    if (!vendorIds.length) return res.json({ data: [] });
+
+    const ph = vendorIds.map((_, i) => `$${i + 1}`).join(', ');
+    const prodRes = await db.query(
+      `SELECT * FROM products WHERE vendor_id IN (${ph}) AND deleted_at IS NULL AND is_available = true`,
+      vendorIds
+    );
+
+    const withDiscount = [];
+    for (const p of prodRes.rows) {
+      const d = discountFor(p, offersByVendor[p.vendor_id]);
+      if (d) withDiscount.push({ product: p, savings: num(p.price) - d.price_after });
+    }
+    // الأعلى وفرًا (بالجنيه) الأول
+    withDiscount.sort((a, b) => b.savings - a.savings);
+    const top = withDiscount.slice(0, limit).map((x) => x.product);
+
+    const opts = await loadOptions(top.map((p) => p.id));
+    res.json({
+      data: top.map((p) => serializeProduct(p, opts[p.id], offersByVendor[p.vendor_id], lang)),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
 /* ---------------- GET /api/offers ---------------- */
 router.get('/offers', async (req, res, next) => {
   try {

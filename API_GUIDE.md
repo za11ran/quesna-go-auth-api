@@ -53,6 +53,7 @@
 | `GET /api/vendors/:id/products/:productId` | تفاصيل منتج + الأحجام/الأنواع (`options`) |
 | `GET /api/vendors/:id/menu-sections` | أقسام قائمة المطعم (بيتزا/برجر/مشويات...) — كل منتج بيرجّع `menu_section_id` بيشاور عليها |
 | `GET /api/products/most-requested?limit=` | الأكثر طلبًا (الأدمن بيختارهم) |
+| `GET /api/products/on-offer?limit=` | منتجات عليها خصم فعّال الآن، الأعلى وفرًا أول |
 | `GET /api/offers` | كل العروض الفعّالة |
 
 - القوائم بترجّع `{ data: [...], meta: { page, per_page, total, last_page } }`.
