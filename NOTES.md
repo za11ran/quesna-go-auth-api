@@ -31,6 +31,18 @@
 
 حسابات تجريبية: `admin@quesnago.com/admin1234` · `owner@metro.test/metro1234` · `dispatch1@quesnago.com/disp1234` · driver: phone `+201000000030` / `driver1234`.
 
+## 🚀 الحالة: منشور ومباشر على الإنتاج (2026-09-04)
+
+- **مباشر على `https://api.quesnago.com`** — VPS واحد (`40.160.88.121`, Ubuntu 24) شغّال:
+  Node API (PM2 `quesna-api`, port 4000) + PostgreSQL (قاعدة `quesnago`) + Nginx + شهادة Let's Encrypt (تجديد تلقائي).
+  - الداش بورد على `/` · الـ API على `/api/` · `/socket.io/` · `/uploads/` — كلها من نفس الدومين بـ HTTPS.
+  - كود السيرفر في `/opt/qg` (اتعمله clone من الريبو). التحديث: `cd /opt/qg && bash deploy/update.sh`.
+  - `.env` الإنتاج في `/opt/qg/.env` · باسورد قاعدة البيانات في `/opt/qg/deploy/.db_password`.
+  - DNS: A record `api` → `40.160.88.121` (هوستنجر).
+  - اتأكد فعليًا: `curl https://api.quesnago.com/api/villages` بيرجّع JSON · الداش بورد بتفتح وتسجيل دخول الأدمن شغّال.
+- **الباقي (اختياري):** `RESEND_API_KEY`+`ADMIN_EMAIL` في `.env` للإيميلات · crontab لـ `deploy/backup.sh` يوميًا ·
+  push فعلي (FCM) · `openapi.yaml` لسه على auth بس · ربط تطبيق Flutter (`baseUrl = https://api.quesnago.com`).
+
 ## ✅ الحالة: الـ API + الداش بورد مكتملين ومختبَرين end-to-end
 
 - **اختبار حقيقي** ضد **PostgreSQL حقيقي (Neon)** = **81/81 ناجح**: auth، الكتالوج، دورة الطلب كاملة
@@ -43,7 +55,7 @@
 - **النشر**: `deploy/setup-server.sh` بيبني الداش بورد؛ Nginx بيقدّمه على `/` ويمرّر `/api` و `/socket.io` و `/uploads`.
   الداش بورد يستخدم نفس الأصل في الإنتاج (`VITE_API_URL` فاضي).
 
-**الباقي:** تشغيل `deploy/setup-server.sh` على الـ VPS فعليًا · `openapi.yaml` لسه على auth بس (توثيق فقط) · ربط تطبيق Flutter بالـ API.
+**الباقي:** ✅ اتنشر على الـ VPS (شوف فوق) · `openapi.yaml` لسه على auth بس (توثيق فقط) · ربط تطبيق Flutter بالـ API.
 
 ## منطق الـ API (مكتمل — كل الأدوار + Realtime + العامل الخلفي)
 
