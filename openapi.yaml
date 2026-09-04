@@ -51,7 +51,7 @@ paths:
             application/json:
               example:
                 success: true
-                count: 21
+                count: 47
                 villages:
                   - { id: 1, key: "quesna", name: "قويسنا", governorate: "المنوفية" }
                   - { id: 2, key: "quesna_al_balad", name: "قويسنا البلد", governorate: "المنوفية" }

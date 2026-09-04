@@ -57,33 +57,66 @@ ALTER TABLE villages ADD COLUMN IF NOT EXISTS key VARCHAR(60);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_villages_key ON villages (key);
 
 INSERT INTO villages (key, name, governorate) VALUES
- ('quesna',               'قويسنا',              'المنوفية'),
- ('quesna_al_balad',      'قويسنا البلد',        'المنوفية'),
- ('mit_bara',             'ميت برة',             'المنوفية'),
- ('abnhas',               'أبنهس',               'المنوفية'),
- ('ashlim',               'أشليم',               'المنوفية'),
- ('kafr_whab',            'كفر وهب',             'المنوفية'),
- ('begerm',               'بجيرم',               'المنوفية'),
- ('tokh_tanbasha',        'طوخ طنبشا',           'المنوفية'),
- ('sharanis',             'شرانيس',              'المنوفية'),
- ('arab_al_raml',         'عرب الرمل',           'المنوفية'),
- ('ramali',               'الرمالي',             'المنوفية'),
- ('kafr_sheikh_ibrahim',  'كفر الشيخ إبراهيم',   'المنوفية'),
- ('mit_abu_shikha',       'ميت أبو شيخة',        'المنوفية'),
- ('manshaet_abu_zikry',   'منشأة أبو ذكرى',      'المنوفية'),
- ('kafr_mit_sarag',       'كفر ميت سراج',        'المنوفية'),
- ('damlo',                'دملو',                'المنوفية'),
- ('el_halamsha',          'الحلامشة',            'المنوفية'),
- ('kafr_el_arab',         'كفر العرب',           'المنوفية'),
- ('om_henan',             'أم خنان',             'المنوفية'),
- ('kafr_abdo',            'كفر عبده',            'المنوفية'),
- ('shabraqas',            'شبراقاص',             'المنوفية')
+ ('quesna',                     'مدينة قويسنا',          'المنوفية'),
+ ('quesna_al_balad',            'قويسنا البلد',          'المنوفية'),
+ ('abnhas',                     'أبنهس',                 'المنوفية'),
+ ('shobra_bakhoum',             'شبرا بخوم',             'المنوفية'),
+ ('mit_bara',                   'ميت بره',               'المنوفية'),
+ ('arab_al_raml',               'عرب الرمل',             'المنوفية'),
+ ('taha_shobra',                'طه شبرا',               'المنوفية'),
+ ('begerm',                     'بجيرم',                 'المنوفية'),
+ ('mostay',                     'مصطاى',                 'المنوفية'),
+ ('ashlim',                     'أشليم',                 'المنوفية'),
+ ('om_henan',                   'أم خنان',               'المنوفية'),
+ ('mit_al_absy',                'ميت العبسى',            'المنوفية'),
+ ('shamandeel',                 'شمنديل',                'المنوفية'),
+ ('agour_al_raml',              'أجهور الرمل',           'المنوفية'),
+ ('beni_ghoryan',               'بني غريان',             'المنوفية'),
+ ('domhoug',                    'دمهوج',                 'المنوفية'),
+ ('mit_al_ezz',                 'ميت العز',              'المنوفية'),
+ ('baqsa',                      'بقسا',                  'المنوفية'),
+ ('ramali',                     'الرمالي',               'المنوفية'),
+ ('al_agayza',                  'العجايزة',              'المنوفية'),
+ ('kafr_absheesh',              'كفر أبشيش',             'المنوفية'),
+ ('mit_al_qasry',               'ميت القصرى',            'المنوفية'),
+ ('kafr_whab',                  'كفر وهب',               'المنوفية'),
+ ('kafr_sheikh_ibrahim',        'كفر الشيخ إبراهيم',     'المنوفية'),
+ ('kofour_al_raml',             'كفور الرمل',            'المنوفية'),
+ ('bara_al_agouz',              'بره العجوز',            'المنوفية'),
+ ('kafr_zein_eldin',            'كفر زين الدين',         'المنوفية'),
+ ('kafr_abdo',                  'كفر عبده',              'المنوفية'),
+ ('kafr_mit_al_absy',           'كفر ميت العبسى',        'المنوفية'),
+ ('manshaet_al_arab',           'منشأة العرب',           'المنوفية'),
+ ('manshaet_abu_zikry',         'منشأة أبو ذكرى',        'المنوفية'),
+ ('kafr_beni_ghoryan',          'كفر بني غريان',         'المنوفية'),
+ ('kafr_abnhas',                'كفر أبنهس',             'المنوفية'),
+ ('kafr_taha_shobra',           'كفر طه شبرا',           'المنوفية'),
+ ('kafr_al_manshy',             'كفر المنشى',            'المنوفية'),
+ ('kafr_abu_alhassan',          'كفر أبو الحسن',         'المنوفية'),
+ ('kafr_al_akram',              'كفر الآكرم',            'المنوفية'),
+ ('kafr_ashlim',                'كفر أشليم',             'المنوفية'),
+ ('kafr_al_salamia',            'كفر السلامية',          'المنوفية'),
+ ('shobra_qabala',              'شبرا قبالة',            'المنوفية'),
+ ('kafr_el_arab',               'كفر العرب القبلي',      'المنوفية'),
+ ('mit_serag',                  'ميت سراج',              'المنوفية'),
+ ('mit_abu_shikha',             'ميت أبو شيخة',          'المنوفية'),
+ ('kafr_mit_sarag',             'كفر ميت سراج',          'المنوفية'),
+ ('manshaet_damlo',             'منشأة دملو',            'المنوفية'),
+ ('manshaet_om_henan',          'منشأة أم خنان',         'المنوفية'),
+ ('manshaet_abdelmoneim_ryad',  'منشأة عبد المنعم رياض', 'المنوفية')
 ON CONFLICT (key) DO UPDATE SET name = EXCLUDED.name, governorate = EXCLUDED.governorate, is_active = true;
 
--- نظافة: انقل أي مستخدم على قرية قديمة (بدون key) لقويسنا، ثم احذف القرى القديمة
+-- نظافة: أي قرية قديمة اتشالت من القائمة (بدون key أو key قديم مش موجود دلوقتي) —
+-- انقل مستخدميها لـ"مدينة قويسنا" ثم احذفها.
 UPDATE users SET village_id = (SELECT id FROM villages WHERE key = 'quesna')
- WHERE village_id IN (SELECT id FROM villages WHERE key IS NULL);
-DELETE FROM villages WHERE key IS NULL;
+ WHERE village_id IN (
+   SELECT id FROM villages
+    WHERE key IS NULL
+       OR key IN ('tokh_tanbasha', 'sharanis', 'el_halamsha', 'damlo', 'shabraqas')
+ );
+DELETE FROM villages
+ WHERE key IS NULL
+    OR key IN ('tokh_tanbasha', 'sharanis', 'el_halamsha', 'damlo', 'shabraqas');
 
 -- ============================================================================
 --  الكتالوج: التجّار + المنتجات + الأحجام + الأقسام + العروض  (Customer API)
