@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, apiBase } from '../../api';
 import { useAsync, ErrBox, Field, Pill } from '../../ui';
+import WorkingHours from './WorkingHours';
 
 export default function VendorProfile() {
   const { data, loading, error, reload } = useAsync(() => api.get('/api/vendor/profile'));
@@ -77,6 +78,10 @@ export default function VendorProfile() {
           <Field label="العنوان"><input value={f.address_ar} onChange={set('address_ar')} /></Field>
         </div>
         <button className="btn primary" disabled={busy} onClick={save}>حفظ</button>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <WorkingHours initial={v.working_hours} onSaved={reload} />
       </div>
     </>
   );

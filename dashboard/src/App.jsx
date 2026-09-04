@@ -3,15 +3,24 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { getRole, getToken } from './api';
 import Login from './Login';
 import Layout from './Layout';
-import Soon from './pages/Soon';
+
 import Overview from './pages/admin/Overview';
 import ChangeRequests from './pages/admin/ChangeRequests';
 import Vendors from './pages/admin/Vendors';
+import Categories from './pages/admin/Categories';
+import Banners from './pages/admin/Banners';
+import Staff from './pages/admin/Staff';
+import AdminOrders from './pages/admin/Orders';
+
 import VendorProducts from './pages/vendor/Products';
 import VendorOrders from './pages/vendor/Orders';
 import VendorOffers from './pages/vendor/Offers';
 import VendorProfile from './pages/vendor/Profile';
 import VendorChangeRequests from './pages/vendor/VendorChangeRequests';
+
+import DispatchQueue from './pages/dispatch/Queue';
+import DispatchDrivers from './pages/dispatch/Drivers';
+import Driver from './pages/driver/Driver';
 
 const HOME = {
   admin: '/admin', dispatcher: '/dispatch',
@@ -32,29 +41,25 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to={HOME[role] || '/admin'} replace />} />
 
-        {/* admin */}
         <Route path="/admin" element={<Overview />} />
         <Route path="/admin/change-requests" element={<ChangeRequests />} />
         <Route path="/admin/vendors" element={<Vendors />} />
-        <Route path="/admin/categories" element={<Soon title="الأقسام" />} />
-        <Route path="/admin/banners" element={<Soon title="البانرات" />} />
-        <Route path="/admin/drivers" element={<Soon title="الدليفري" />} />
-        <Route path="/admin/dispatchers" element={<Soon title="المشرفين" />} />
-        <Route path="/admin/orders" element={<Soon title="الطلبات" />} />
+        <Route path="/admin/categories" element={<Categories />} />
+        <Route path="/admin/banners" element={<Banners />} />
+        <Route path="/admin/drivers" element={<Staff kind="drivers" />} />
+        <Route path="/admin/dispatchers" element={<Staff kind="dispatchers" />} />
+        <Route path="/admin/orders" element={<AdminOrders />} />
 
-        {/* dispatcher */}
-        <Route path="/dispatch" element={<Soon title="طابور التوزيع" />} />
-        <Route path="/dispatch/drivers" element={<Soon title="الدليفري" />} />
+        <Route path="/dispatch" element={<DispatchQueue />} />
+        <Route path="/dispatch/drivers" element={<DispatchDrivers />} />
 
-        {/* vendor */}
         <Route path="/vendor" element={<VendorOrders />} />
         <Route path="/vendor/products" element={<VendorProducts />} />
         <Route path="/vendor/offers" element={<VendorOffers />} />
         <Route path="/vendor/profile" element={<VendorProfile />} />
         <Route path="/vendor/change-requests" element={<VendorChangeRequests />} />
 
-        {/* driver */}
-        <Route path="/driver" element={<Soon title="طلباتي" />} />
+        <Route path="/driver" element={<Driver />} />
 
         <Route path="*" element={<Navigate to={HOME[role] || '/admin'} replace />} />
       </Routes>
