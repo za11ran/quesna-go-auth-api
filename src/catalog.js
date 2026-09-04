@@ -9,10 +9,7 @@
 //   GET /api/offers
 const router = require('express').Router();
 const db = require('./db');
-
-// اللغة من هيدر LANG (افتراضي ar)
-const langOf = (req) =>
-  String(req.get('LANG') || req.query.lang || 'ar').toLowerCase().startsWith('en') ? 'en' : 'ar';
+const { langOf } = require('./lang'); // هيدر LANG أو ?lang= (ar|en)
 
 const num = (v) => (v === null || v === undefined ? v : Number(v));
 

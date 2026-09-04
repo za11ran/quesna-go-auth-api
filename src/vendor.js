@@ -512,13 +512,34 @@ router.patch('/orders/:id/status', vendorRole, async (req, res, next) => {
         await db.query(`UPDATE orders SET stock_deducted = true WHERE id = $1`, [req.params.id]);
       }
       await setStatus(req.params.id, 'accepted', 'vendor');
-      await notify(bundle.order.customer_id, { title: 'تم قبول طلبك', body: `طلبك رقم ${req.params.id} قيد التحضير`, type: 'order_accepted', orderId: req.params.id });
+      await notify(bundle.order.customer_id, {
+        title: { ar: 'تم قبول طلبك', en: 'Your order was accepted' },
+        body: {
+          ar: `طلبك رقم ${req.params.id} قيد التحضير`,
+          en: `Order ${req.params.id} is being prepared`,
+        },
+        type: 'order_accepted', orderId: req.params.id,
+      });
     } else if (to === 'rejected') {
       const reason = (req.body || {}).reason ? String(req.body.reason).slice(0, 300) : null;
       await setStatus(req.params.id, 'rejected', 'vendor', { reject_reason: reason });
-      await notify(bundle.order.customer_id, { title: 'اعتذر المتجر عن طلبك', body: reason || 'تم رفض الطلب', type: 'order_rejected', orderId: req.params.id });
+      await notify(bundle.order.customer_id, {
+        title: { ar: 'اعتذر المتجر عن طلبك', en: 'The store could not accept your order' },
+        body: reason
+          ? { ar: reason, en: reason }
+          : { ar: 'تم رفض الطلب', en: 'The order was rejected' },
+        type: 'order_rejected', orderId: req.params.id,
+      });
     } else if (to === 'ready_for_pickup') {
       await setStatus(req.params.id, 'ready_for_pickup', 'vendor');
+      await notify(bundle.order.customer_id, {
+        title: { ar: 'طلبك جاهز', en: 'Your order is ready' },
+        body: {
+          ar: 'المتجر جهّز طلبك وجاري تعيين مندوب توصيل',
+          en: 'The store has prepared your order; a driver is being assigned',
+        },
+        type: 'order_ready', orderId: req.params.id,
+      });
       emitTo('role:dispatcher', 'dispatch:needs_assignment', { order_id: req.params.id });
       emitTo('role:admin', 'dispatch:needs_assignment', { order_id: req.params.id });
     } else {

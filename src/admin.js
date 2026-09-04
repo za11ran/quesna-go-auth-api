@@ -193,6 +193,32 @@ router.post('/vendors/:id/suspend', adminOnly, async (req, res, next) => {
   }
 });
 
+/* -------- products list (لاختيار الأكثر طلبًا) -------- */
+router.get('/products', adminOnly, async (req, res, next) => {
+  try {
+    const where = ['p.deleted_at IS NULL', 'v.deleted_at IS NULL'];
+    const params = [];
+    if (req.query.vendor_id) { params.push(String(req.query.vendor_id)); where.push(`p.vendor_id = $${params.length}`); }
+    if (req.query.search) {
+      params.push(`%${String(req.query.search).trim()}%`);
+      where.push(`(p.name_ar ILIKE $${params.length} OR p.name_en ILIKE $${params.length})`);
+    }
+    if (req.query.most_requested === 'true') where.push('p.is_most_requested = true');
+    const { rows } = await db.query(
+      `SELECT p.id, p.name_ar, p.name_en, p.price, p.image, p.category, p.is_available,
+              p.is_most_requested, p.vendor_id, v.name_ar AS vendor_name_ar, v.name_en AS vendor_name_en
+         FROM products p JOIN vendors v ON v.id = p.vendor_id
+        WHERE ${where.join(' AND ')}
+        ORDER BY p.is_most_requested DESC, v.name_ar, p.sort_order, p.name_ar
+        LIMIT 500`,
+      params
+    );
+    res.json({ data: rows });
+  } catch (e) {
+    next(e);
+  }
+});
+
 /* -------- most-requested -------- */
 router.post('/products/most-requested', adminOnly, async (req, res, next) => {
   try {

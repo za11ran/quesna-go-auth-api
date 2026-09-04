@@ -9,6 +9,7 @@ import ChangeRequests from './pages/admin/ChangeRequests';
 import Vendors from './pages/admin/Vendors';
 import Categories from './pages/admin/Categories';
 import Banners from './pages/admin/Banners';
+import MostRequested from './pages/admin/MostRequested';
 import Staff from './pages/admin/Staff';
 import AdminOrders from './pages/admin/Orders';
 
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/admin/vendors" element={<Vendors />} />
         <Route path="/admin/categories" element={<Categories />} />
         <Route path="/admin/banners" element={<Banners />} />
+        <Route path="/admin/most-requested" element={<MostRequested />} />
         <Route path="/admin/drivers" element={<Staff kind="drivers" />} />
         <Route path="/admin/dispatchers" element={<Staff kind="dispatchers" />} />
         <Route path="/admin/orders" element={<AdminOrders />} />

@@ -172,12 +172,16 @@ router.patch('/orders/:id/status', driverRole, async (req, res, next) => {
     if (to === 'picked_up') {
       await setStatus(req.params.id, 'picked_up', 'driver');
       await notify(b.order.customer_id, {
-        title: 'طلبك اتحرك', body: 'الدليفري استلم طلبك من المتجر', type: 'order_on_the_way', orderId: req.params.id,
+        title: { ar: 'تم استلام طلبك', en: 'Your order was picked up' },
+        body: { ar: 'الدليفري استلم طلبك من المتجر وجاري التحرك إليك', en: 'The driver picked up your order and is on the way' },
+        type: 'order_on_the_way', orderId: req.params.id,
       });
     } else if (to === 'on_the_way') {
       await setStatus(req.params.id, 'on_the_way', 'driver');
       await notify(b.order.customer_id, {
-        title: 'طلبك في الطريق إليك', body: 'الدليفري جاي دلوقتي', type: 'order_on_the_way', orderId: req.params.id,
+        title: { ar: 'طلبك في الطريق إليك', en: 'Your order is on the way' },
+        body: { ar: 'الدليفري جاي دلوقتي', en: 'The driver is heading to you now' },
+        type: 'order_on_the_way', orderId: req.params.id,
       });
     } else if (to === 'arrived') {
       await setStatus(req.params.id, 'arrived', 'driver');
@@ -192,7 +196,12 @@ router.patch('/orders/:id/status', driverRole, async (req, res, next) => {
         [d.id]
       );
       await notify(b.order.customer_id, {
-        title: 'تم توصيل طلبك', body: `طلبك رقم ${req.params.id} وصل. شكرًا!`, type: 'order_delivered', orderId: req.params.id,
+        title: { ar: 'تم توصيل طلبك', en: 'Your order was delivered' },
+        body: {
+          ar: `طلبك رقم ${req.params.id} وصل. شكرًا لاستخدامك Quesna Go!`,
+          en: `Order ${req.params.id} has arrived. Thanks for using Quesna Go!`,
+        },
+        type: 'order_delivered', orderId: req.params.id,
         data: { receipt_url: `/api/orders/${req.params.id}/receipt` },
       });
     }

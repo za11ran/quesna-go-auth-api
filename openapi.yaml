@@ -1,23 +1,39 @@
 openapi: 3.0.3
 info:
-  title: Quesna Go Auth API
-  version: 1.1.0
+  title: Quesna Go API
+  version: 2.0.0
   description: >
-    Auth API for the Quesna Go app (Arabic + English).
-    Flow: register or login -> OTP code is sent -> verify-otp -> returns a JWT token.
-    In development mode the code is also returned in the response as dev_otp.
-    Request bodies are sent as form-data (JSON is also accepted).
-    Every error carries a stable error_code the app localizes itself (see ERROR_CODES.md).
+    Customer-app API for Quesna Go (Arabic + English).
+
+
+    Auth: register or login -> OTP code is sent -> verify-otp -> returns a JWT token.
+    In development mode the code is also returned as dev_otp.
+    Send the token on every protected call as `Authorization: Bearer <token>`.
+
+
+    Language: pass `LANG: ar` or `LANG: en` as a request header on catalog / orders / notifications
+    calls to get localized text. On register the UI language is the `?lang=` query parameter.
+
+
+    Auth request bodies are form-data (JSON also accepted). Catalog/orders bodies are JSON.
+    Every error carries a stable `error_code` the app localizes itself (see ERROR_CODES.md).
+
+
+    This file covers the endpoints the customer app needs. Dashboard-only endpoints
+    (/api/vendor, /api/admin, /api/dispatch, /api/driver) are intentionally not listed.
 
 servers:
+  - url: https://api.quesnago.com
+    description: Production
   - url: http://localhost:4000
     description: Local
-  - url: https://REPLACE-WITH-YOUR-DEPLOYED-URL
-    description: Production (change later)
 
 tags:
   - name: Auth
   - name: Villages
+  - name: Catalog
+  - name: Orders
+  - name: Account
 
 paths:
   /api/villages:
@@ -343,7 +359,525 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  # ============================ Catalog (public) ============================
+  /api/vendors:
+    get:
+      tags: [Catalog]
+      operationId: listVendors
+      summary: List vendors
+      description: Approved & active vendors only. Paginated.
+      parameters:
+        - $ref: '#/components/parameters/LangHeader'
+        - { in: query, name: type, schema: { type: string, enum: [restaurant, supermarket, pharmacy, bakery, cafe, other] } }
+        - { in: query, name: search, schema: { type: string } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: per_page, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Vendor' } }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+
+  /api/vendors/{id}:
+    get:
+      tags: [Catalog]
+      operationId: getVendor
+      summary: Vendor details
+      parameters:
+        - $ref: '#/components/parameters/LangHeader'
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vendor' }
+        '404':
+          description: Not found
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/vendors/{id}/products:
+    get:
+      tags: [Catalog]
+      operationId: listVendorProducts
+      summary: Products of a vendor
+      parameters:
+        - $ref: '#/components/parameters/LangHeader'
+        - { in: path, name: id, required: true, schema: { type: integer } }
+        - { in: query, name: category, schema: { type: string } }
+        - { in: query, name: search, schema: { type: string } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: per_page, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Product' } }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+
+  /api/vendors/{id}/products/{productId}:
+    get:
+      tags: [Catalog]
+      operationId: getProduct
+      summary: Product details (with options)
+      parameters:
+        - $ref: '#/components/parameters/LangHeader'
+        - { in: path, name: id, required: true, schema: { type: integer } }
+        - { in: path, name: productId, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '404':
+          description: Not found
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/home/categories:
+    get:
+      tags: [Catalog]
+      operationId: homeCategories
+      summary: Home screen categories
+      parameters: [ { $ref: '#/components/parameters/LangHeader' } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              example:
+                data:
+                  - { id: 1, name: "مطاعم", image: "/uploads/cat/1.webp", type: "restaurant", action: "filter" }
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        name: { type: string }
+                        image: { type: string, nullable: true }
+                        type: { type: string, nullable: true }
+                        action: { type: string, nullable: true }
+
+  /api/home/banners:
+    get:
+      tags: [Catalog]
+      operationId: homeBanners
+      summary: Home screen banners / promo slider
+      parameters: [ { $ref: '#/components/parameters/LangHeader' } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              example:
+                data:
+                  - { id: 1, title: "خصم 20%", image: "/uploads/ban/1.webp", target_type: "vendor", target_ref: "12" }
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        title: { type: string, nullable: true }
+                        image: { type: string }
+                        target_type: { type: string, nullable: true, description: "vendor | product | category | url | none" }
+                        target_ref: { type: string, nullable: true }
+
+  /api/products/most-requested:
+    get:
+      tags: [Catalog]
+      operationId: mostRequested
+      summary: Most-requested products (chosen by admin)
+      parameters:
+        - $ref: '#/components/parameters/LangHeader'
+        - { in: query, name: limit, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Product' } }
+
+  /api/offers:
+    get:
+      tags: [Catalog]
+      operationId: listOffers
+      summary: Active offers across all vendors
+      parameters: [ { $ref: '#/components/parameters/LangHeader' } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Offer' } }
+
+  # ============================ Orders (token) ============================
+  /api/orders:
+    post:
+      tags: [Orders]
+      operationId: createOrder
+      summary: Place an order
+      description: >
+        Cart may mix products from several vendors; the response splits totals per vendor.
+        Provide either `address_id` (a saved address) or `address_text` (+ optional lat/lng).
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/LangHeader' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              payment_method: cash
+              address_id: 4
+              notes: "الشقة في الدور الثالث"
+              items:
+                - { product_id: 101, quantity: 2, option_id: 5, note: "بدون بصل" }
+                - { product_id: 210, quantity: 1 }
+            schema:
+              type: object
+              required: [items]
+              properties:
+                payment_method: { type: string, enum: [cash, card, wallet], default: cash }
+                address_id: { type: integer, nullable: true }
+                address_text: { type: string, nullable: true }
+                address_lat: { type: number, nullable: true }
+                address_lng: { type: number, nullable: true }
+                notes: { type: string, nullable: true }
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [product_id, quantity]
+                    properties:
+                      product_id: { type: integer }
+                      quantity: { type: integer, minimum: 1 }
+                      option_id: { type: integer, nullable: true }
+                      note: { type: string, nullable: true }
+      responses:
+        '201':
+          description: Order created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } }
+        '409':
+          description: Vendor closed / product or option unavailable / out of stock
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: Empty cart / product not found / min order not met / address required
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    get:
+      tags: [Orders]
+      operationId: listOrders
+      summary: My orders
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: per_page, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Order' } }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+
+  /api/orders/quick:
+    post:
+      tags: [Orders]
+      operationId: createQuickOrder
+      summary: Quick order (free text + photos)
+      description: multipart/form-data. Field `images` accepts up to 5 files.
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [details]
+              properties:
+                details: { type: string }
+                price: { type: number, nullable: true, description: "customer's estimated price" }
+                images:
+                  type: array
+                  items: { type: string, format: binary }
+      responses:
+        '201':
+          description: Received
+          content:
+            application/json:
+              example: { success: true, id: "qo_12", images: ["/uploads/quick/ab.webp"] }
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  id: { type: string }
+                  images: { type: array, items: { type: string } }
+        '422':
+          description: details required
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/orders/{id}:
+    get:
+      tags: [Orders]
+      operationId: getOrder
+      summary: Order details
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/LangHeader'
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } }
+        '404':
+          description: Not found
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/orders/{id}/receipt:
+    get:
+      tags: [Orders]
+      operationId: getReceipt
+      summary: Order receipt
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order_id: { type: string }
+                  issued_at: { type: string, format: date-time }
+                  status: { type: string }
+                  customer:
+                    type: object
+                    nullable: true
+                    properties:
+                      name: { type: string }
+                      phone: { type: string }
+                      address: { type: string }
+                  vendors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        subtotal: { type: number }
+                        delivery_fee: { type: number }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        unit_price: { type: number }
+                        quantity: { type: integer }
+                        line_total: { type: number }
+                  subtotal: { type: number }
+                  delivery_fee: { type: number }
+                  discount: { type: number }
+                  total: { type: number }
+                  payment_method: { type: string }
+                  payment_status: { type: string }
+                  delivered_at: { type: string, format: date-time, nullable: true }
+                  pdf_url: { type: string, nullable: true }
+
+  /api/orders/{id}/cancel:
+    post:
+      tags: [Orders]
+      operationId: cancelOrder
+      summary: Cancel an order (only while still pending)
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/LangHeader'
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: Cancelled
+          content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } }
+        '409':
+          description: Cannot cancel after the vendor accepted
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  # ============================ Account: addresses / notifications / devices ============================
+  /api/addresses:
+    get:
+      tags: [Account]
+      operationId: listAddresses
+      summary: My saved addresses
+      security: [ { bearerAuth: [] } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Address' } }
+    post:
+      tags: [Account]
+      operationId: createAddress
+      summary: Add an address
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: { label: "البيت", details: "شارع 9، قرية كفر داود، بجوار الصيدلية", lat: 30.41, lng: 30.99, is_default: true }
+            schema:
+              type: object
+              required: [details]
+              properties:
+                label: { type: string, nullable: true }
+                details: { type: string }
+                lat: { type: number, nullable: true }
+                lng: { type: number, nullable: true }
+                is_default: { type: boolean, default: false }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Address' } } }
+        '422':
+          description: details required
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/addresses/{id}:
+    delete:
+      tags: [Account]
+      operationId: deleteAddress
+      summary: Delete an address
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { in: path, name: id, required: true, schema: { type: integer } } ]
+      responses:
+        '200':
+          description: Deleted
+          content: { application/json: { example: { success: true }, schema: { type: object, properties: { success: { type: boolean } } } } }
+        '404':
+          description: Not found
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/notifications:
+    get:
+      tags: [Account]
+      operationId: listNotifications
+      summary: My notifications
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: per_page, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        title: { type: string }
+                        body: { type: string }
+                        type: { type: string }
+                        order_id: { type: string, nullable: true }
+                        data: { type: object, nullable: true }
+                        is_read: { type: boolean }
+                        created_at: { type: string, format: date-time }
+                  meta:
+                    allOf:
+                      - $ref: '#/components/schemas/PageMeta'
+                      - type: object
+                        properties: { unread: { type: integer } }
+
+  /api/notifications/{id}/read:
+    post:
+      tags: [Account]
+      operationId: markNotificationRead
+      summary: Mark a notification as read
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { in: path, name: id, required: true, schema: { type: integer } } ]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { example: { success: true }, schema: { type: object, properties: { success: { type: boolean } } } } }
+        '404':
+          description: Not found
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/devices:
+    post:
+      tags: [Account]
+      operationId: registerDevice
+      summary: Register a push token (FCM/APNs)
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: { token: "fcm-device-token", platform: "android" }
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+                platform: { type: string, enum: [android, ios, web] }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { example: { success: true }, schema: { type: object, properties: { success: { type: boolean } } } } }
+        '422':
+          description: token required
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
 components:
+  parameters:
+    LangHeader:
+      in: header
+      name: LANG
+      required: false
+      schema: { type: string, enum: [ar, en], default: ar }
+      description: "Response language for text fields"
+
   securitySchemes:
     bearerAuth:
       type: http
@@ -390,4 +924,178 @@ components:
           description: كود ثابت يترجمه التطبيق (راجع ERROR_CODES.md)
           example: INVALID_PHONE
         error: { type: string, description: نص عربي للتشخيص فقط }
+        message: { type: string, description: "نص الرسالة (بعض المسارات تستخدم message بدل error)" }
         attempts_left: { type: integer, description: "مع OTP_WRONG فقط" }
+
+    PageMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+        last_page: { type: integer }
+
+    Vendor:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        type: { type: string, enum: [restaurant, supermarket, pharmacy, bakery, cafe, other] }
+        description: { type: string }
+        logo: { type: string, nullable: true }
+        cover_image: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        category_label: { type: string }
+        rating: { type: number }
+        reviews_count: { type: integer }
+        is_open: { type: boolean }
+        is_active: { type: boolean }
+        status: { type: string }
+        working_hours: { type: object, nullable: true }
+        working_hours_text: { type: string, nullable: true }
+        delivery_fee: { type: number }
+        min_order: { type: number }
+        avg_prep_time_minutes: { type: integer }
+        address: { type: string, nullable: true }
+        location:
+          type: object
+          nullable: true
+          properties: { lat: { type: number }, lng: { type: number } }
+        delivery_zones: { type: array, items: { type: string } }
+
+    ProductOption:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        price: { type: number }
+        additional_price: { type: number, description: "price - product base price" }
+        stock: { type: integer, nullable: true }
+        is_available: { type: boolean }
+
+    Product:
+      type: object
+      properties:
+        id: { type: integer }
+        vendor_id: { type: integer }
+        product_name: { type: string }
+        brand: { type: string }
+        description: { type: string }
+        price: { type: number }
+        image: { type: string, nullable: true }
+        category: { type: string, nullable: true }
+        stock: { type: integer, nullable: true, description: "null = غير محدود" }
+        is_available: { type: boolean }
+        has_options: { type: boolean }
+        sort_order: { type: integer }
+        discount:
+          type: object
+          nullable: true
+          properties:
+            type: { type: string, enum: [percent, amount] }
+            value: { type: number }
+            price_after: { type: number }
+        options: { type: array, items: { $ref: '#/components/schemas/ProductOption' } }
+
+    Offer:
+      type: object
+      properties:
+        id: { type: integer }
+        vendor_id: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        banner_image: { type: string, nullable: true }
+        scope: { type: string, enum: [store, category, product] }
+        target_id: { type: string, nullable: true }
+        discount_type: { type: string, enum: [percent, amount] }
+        discount_value: { type: number }
+        starts_at: { type: string, format: date-time, nullable: true }
+        ends_at: { type: string, format: date-time, nullable: true }
+        is_active: { type: boolean }
+
+    Address:
+      type: object
+      properties:
+        id: { type: integer }
+        label: { type: string, nullable: true }
+        details: { type: string }
+        lat: { type: number, nullable: true }
+        lng: { type: number, nullable: true }
+        is_default: { type: boolean }
+
+    Order:
+      type: object
+      properties:
+        id: { type: string, example: "ord_1042" }
+        status:
+          type: string
+          enum: [pending, accepted, preparing, ready_for_pickup, assigned, picked_up, on_the_way, arrived, delivered, cancelled]
+        driver_sub_status: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        customer:
+          type: object
+          nullable: true
+          properties: { id: { type: string }, name: { type: string }, phone: { type: string } }
+        vendors:
+          type: array
+          items:
+            type: object
+            properties:
+              vendor_id: { type: integer }
+              vendor_name: { type: string }
+              subtotal: { type: number }
+              delivery_fee: { type: number }
+        driver:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            name: { type: string }
+            phone: { type: string }
+            photo: { type: string, nullable: true }
+            vehicle_type: { type: string }
+            location:
+              type: object
+              nullable: true
+              properties: { lat: { type: number }, lng: { type: number }, updated_at: { type: string, format: date-time } }
+        subtotal: { type: number }
+        delivery_total: { type: number }
+        discount_total: { type: number }
+        total: { type: number }
+        payment_method: { type: string, enum: [cash, card, wallet] }
+        payment_status: { type: string }
+        notes: { type: string, nullable: true }
+        address_text: { type: string, nullable: true }
+        address:
+          type: object
+          nullable: true
+          properties: { text: { type: string }, lat: { type: number }, lng: { type: number } }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id: { type: integer }
+              name: { type: string }
+              option_name: { type: string, nullable: true }
+              unit_price: { type: number }
+              quantity: { type: integer }
+              line_total: { type: number }
+              note: { type: string, nullable: true }
+        timestamps:
+          type: object
+          properties:
+            placed_at: { type: string, format: date-time, nullable: true }
+            accepted_at: { type: string, format: date-time, nullable: true }
+            ready_at: { type: string, format: date-time, nullable: true }
+            assigned_at: { type: string, format: date-time, nullable: true }
+            picked_up_at: { type: string, format: date-time, nullable: true }
+            delivered_at: { type: string, format: date-time, nullable: true }
+        status_history:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { type: string }
+              at: { type: string, format: date-time }
+              by: { type: string }

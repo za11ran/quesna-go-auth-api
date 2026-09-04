@@ -15,8 +15,7 @@ const { emitTo } = require('./realtime');
 const { loadOrder, serializeOrder, n2 } = require('./orderView');
 const { imagesUpload, saveImages } = require('./upload');
 
-const langOf = (req) =>
-  String(req.get('LANG') || 'ar').toLowerCase().startsWith('en') ? 'en' : 'ar';
+const { langOf } = require('./lang'); // هيدر LANG أو ?lang= (ar|en)
 const fail = (res, status, code, message) =>
   res.status(status).json({ success: false, error_code: code, message, timestamp: new Date().toISOString() });
 

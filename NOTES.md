@@ -69,10 +69,13 @@
    - **الباقي**: تجربة end-to-end مع API+DB شغّالين، ربطها بالنشر (تُقدّم من Nginx أو الـ API)، تحسينات UX.
    - تشغيل: `cd dashboard && npm install --ignore-scripts && npm run dev` (5173). البناء لازم يكون في مسار غير الـ sandbox (الـ Desktop تمام).
 2. النشر على الـ VPS (السكربتات جاهزة) + Cloudinary اختياري + Resend.
-3. `openapi.yaml` — لسه على auth بس؛ محتاج تحديث لكل المسارات.
+3. ~~`openapi.yaml` — لسه على auth بس~~ ✅ **اتغطّى كل مسارات تطبيق العميل** (auth + كتالوج + طلبات + عناوين/إشعارات/أجهزة) — 27 operationId. مسارات اللوحات (vendor/admin/dispatch/driver) مقصود إنها مش فيه (مش بيستخدمها التطبيق).
 4. تكميلي صغير: `/vendor/staff` CRUD، bulk-price، push فعلي عبر `user_devices` (FCM/OneSignal)، تقارير أعمق.
 
 ## تم مؤخرًا
+- **مراجعة اللغة (ar/en) في كل مسارات العميل**: `src/lang.js` موحّد — `langOf(req)` بيقرأ هيدر `LANG` ثم `?lang=` ثم `body.lang` ثم `ar`. الكتالوج والطلبات بيستخدموه (الطلبات كانت بتقرأ الهيدر بس، دلوقتي بتقرأ الباراميتر كمان). إشعارات العميل بقت ثنائية اللغة `{ ar, en }` و`notify()` بيختار حسب `users.preferred_language` للعميل (مش لغة طلب الدليفري/التاجر). أُضيف إشعار **«طلبك جاهز»** عند `ready_for_pickup`. أخطاء الـ API عربي فقط **بالتصميم** — التطبيق بيترجم `error_code` بنفسه.
+- **الداش بورد**: صفحة **«الأكثر طلبًا»** للأدمن (`/admin/most-requested`) — تحديد منتجات قسم الأكثر طلبًا في التطبيق. مدعومة بـ `GET /api/admin/products` (قائمة كل المنتجات + اسم المتجر + `is_most_requested`).
+- **`API_GUIDE.md`**: دليل ربط تطبيق Flutter بالـ API (Base URL، التوكن، هيدر LANG، كل مسارات العميل، Socket.IO، أمثلة Dart).
 - **رفع الصور**: `src/upload.js` (multer memory + sharp → webp، 5MB، jpg/png/webp) → `/uploads` (Nginx مباشرة). لوجو/غلاف/صورة منتج → **Change Request**. `/api/admin/categories|banners|... /image` و `/api/orders/quick` (multipart، حتى 5 صور).
 - **Vendor**: `PUT /vendor/profile/working-hours` (فوري)، **عروض CRUD** كلها Change Request؛ `applyChangeRequest` يدعم `entity_type='offer'`.
 - **Admin**: أقسام الهوم CRUD، البانرات CRUD، **إنشاء متجر + حساب صاحبه**، **حسابات دليفري/مشرفين**، `/admin/orders` `/admin/users` `/admin/reports`. + `GET /api/home/banners` للعميل.
