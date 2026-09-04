@@ -41,7 +41,7 @@
   - DNS: A record `api` → `40.160.88.121` (هوستنجر).
   - اتأكد فعليًا: `curl https://api.quesnago.com/api/villages` بيرجّع JSON · الداش بورد بتفتح وتسجيل دخول الأدمن شغّال.
 - **الباقي (اختياري):** `RESEND_API_KEY`+`ADMIN_EMAIL` في `.env` للإيميلات · crontab لـ `deploy/backup.sh` يوميًا ·
-  push فعلي (FCM) · `openapi.yaml` لسه على auth بس · ربط تطبيق Flutter (`baseUrl = https://api.quesnago.com`).
+  `openapi.yaml` لسه على auth بس · ربط تطبيق Flutter (`baseUrl = https://api.quesnago.com`).
 
 ## ✅ الحالة: الـ API + الداش بورد مكتملين ومختبَرين end-to-end
 
@@ -70,9 +70,24 @@
    - تشغيل: `cd dashboard && npm install --ignore-scripts && npm run dev` (5173). البناء لازم يكون في مسار غير الـ sandbox (الـ Desktop تمام).
 2. النشر على الـ VPS (السكربتات جاهزة) + Cloudinary اختياري + Resend.
 3. ~~`openapi.yaml` — لسه على auth بس~~ ✅ **اتغطّى كل مسارات تطبيق العميل** (auth + كتالوج + طلبات + عناوين/إشعارات/أجهزة) — 27 operationId. مسارات اللوحات (vendor/admin/dispatch/driver) مقصود إنها مش فيه (مش بيستخدمها التطبيق).
-4. تكميلي صغير: `/vendor/staff` CRUD، bulk-price، push فعلي عبر `user_devices` (FCM/OneSignal)، تقارير أعمق.
+4. تكميلي صغير: `/vendor/staff` CRUD، bulk-price، تقارير أعمق.
 
 ## تم مؤخرًا
+- **إشعارات النظام (Push) عبر Firebase شغّالة فعليًا** — `src/push.js` (يستخدم
+  `firebase-admin/app`+`firebase-admin/messaging`، الـ API الحديثة الـ modular مش
+  `admin.credential.cert()` القديمة اللي في أغلب الأمثلة). `notify()` في `src/notify.js`
+  بقى بيبعت push فعلي لكل أجهزة العميل المسجّلة في `user_devices` (بالإضافة للتخزين +
+  البث اللحظي اللي كانوا شغّالين أصلًا) — للعملاء بس (`recipientType==='customer'`)،
+  مش للوحات (staff_users مالهاش جدول أجهزة). التوكنز اللي بقت غير صالحة (اتشال
+  التطبيق...) بتتشال تلقائي من `user_devices` أول ما FCM يرجّع خطأها.
+  محتاج `FIREBASE_SERVICE_ACCOUNT_PATH` في `.env` (مسار ملف Service Account سرّي —
+  متجاهل في `.gitignore`، مش في الريبو خالص؛ على السيرفر بيترفع يدويًا زي `.db_password`،
+  شوف `deploy/DEPLOY.md` §4c). لو المتغيّر مش موجود، السيرفر بيشتغل عادي بدون push.
+  تطبيق Flutter اتوصّل من ناحيته كمان (`firebase_core`+`firebase_messaging`+
+  `flutter_local_notifications`، `PushNotificationService`) — بيسجّل توكن الجهاز بعد
+  تسجيل الدخول وعلى بداية التطبيق لو مسجّل دخول أصلًا، عبر `POST /api/devices` اللي
+  كان موجود من زمان بدون استخدام. الـ package name اتغيّر من `com.example.quesna_go`
+  الافتراضي لـ `com.quesnago.app` قبل تسجيل Firebase (كان لازم يتعمل قبل أي نشر).
 - **اسم المتجر بقى للأدمن بس، حتى مع full_permissions** — `name_ar`/`name_en` اتشالوا
   خالص من `PUT /vendor/profile` (مش موجودين في `allowed` ولا في `approval_rules.vendor_fields`
   تاني) ومن نموذج «بيانات المتجر» في لوحة التاجر. الأدمن بس اللي يقدر يغيّر الاسم

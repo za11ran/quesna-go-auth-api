@@ -5,3 +5,4 @@ node_modules/
 .DS_Store
 deploy/.db_password
 uploads/
+firebase-service-account.json

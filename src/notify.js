@@ -4,6 +4,7 @@
 const db = require('./db');
 const { emitTo } = require('./realtime');
 const { t } = require('./lang');
+const { sendPush } = require('./push');
 
 async function notify(userId, { title, body = '', type, orderId = null, data = null, recipientType = 'customer' }) {
   if (!userId) return;
@@ -27,7 +28,11 @@ async function notify(userId, { title, body = '', type, orderId = null, data = n
       title: finalTitle, body: finalBody, type, order_id: orderId, data,
       created_at: new Date().toISOString(),
     });
-    // TODO: push للأجهزة في user_devices عند تفعيل مزوّد الـ push
+    // push فعلي (FCM) — بس للعملاء (user_devices مربوطة بـ users فقط، مش staff_users).
+    // صامت تمامًا لو مفيش مفتاح Firebase مضبوط أو مفيش جهاز مسجّل.
+    if (recipientType === 'customer') {
+      sendPush(userId, { title: finalTitle, body: finalBody, data: { type, order_id: orderId, ...(data || {}) } });
+    }
   } catch (e) {
     console.error('[notify error]', e.message);
   }

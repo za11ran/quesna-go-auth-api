@@ -117,6 +117,25 @@ https://api.quesnago.com/api/villages
 
 ---
 
+## 4c) إشعارات النظام (Push عبر Firebase)
+
+مفتاح Firebase سرّي — مش في الريبو، لازم ترفعه للسيرفر يدويًا (زي `.db_password`):
+
+```bash
+scp firebase-service-account.json root@SERVER_IP:/opt/quesna-go-auth-api/
+```
+
+بعد كده على السيرفر أضف السطر ده لملف `.env`:
+```
+FIREBASE_SERVICE_ACCOUNT_PATH=./firebase-service-account.json
+```
+وأعد تشغيل الـ API: `pm2 restart quesna-api`.
+
+(لو الملف مش موجود، السيرفر بيشتغل عادي — الإشعارات بتتسجّل في التطبيق والداش بورد
+بس من غير إشعار نظام خارج التطبيق.)
+
+---
+
 ## 5) باك أب يومي
 
 ```bash
