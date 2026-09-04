@@ -51,39 +51,39 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
 ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS attempts SMALLINT NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id, purpose);
 
--- ---------- إدخال 30 قرية للاختيار منها ----------
-INSERT INTO villages (name, governorate) VALUES
- ('كفر داود',        'المنوفية'),
- ('ميت أبو الكوم',   'المنوفية'),
- ('البتانون',        'المنوفية'),
- ('الخطاطبة',        'المنوفية'),
- ('أبو رقبة',        'القليوبية'),
- ('سندبيس',          'القليوبية'),
- ('كفر شكر',         'القليوبية'),
- ('طملاي',           'الغربية'),
- ('محلة أبو علي',    'الغربية'),
- ('أبيار',           'الغربية'),
- ('زاوية غزال',      'الغربية'),
- ('شبراخيت',         'البحيرة'),
- ('كوم حمادة',       'البحيرة'),
- ('الدلنجات',        'البحيرة'),
- ('نكلا',            'البحيرة'),
- ('صفط اللبن',       'الجيزة'),
- ('كفر حكيم',        'الجيزة'),
- ('منشأة القناطر',   'الجيزة'),
- ('أوسيم',           'الجيزة'),
- ('البراجيل',        'الجيزة'),
- ('كرداسة',          'الجيزة'),
- ('ميت بدر خميس',    'الدقهلية'),
- ('بلقاس',           'الدقهلية'),
- ('شها',             'الدقهلية'),
- ('دميرة',           'الدقهلية'),
- ('نبروه',           'الدقهلية'),
- ('جمصة',            'الدقهلية'),
- ('الستامونى',       'الدقهلية'),
- ('كفر سعد',         'دمياط'),
- ('الروضة',          'المنيا')
-ON CONFLICT (name) DO NOTHING;
+-- ---------- قرى مركز قويسنا (نفس مفاتيح تطبيق العميل: key = slug ثابت) ----------
+ALTER TABLE villages ADD COLUMN IF NOT EXISTS key VARCHAR(60);
+-- فهرس فريد عادي: قيم NULL المتعددة مسموحة في Postgres، فالقرى القديمة (بدون key) ما بتتعارضش
+CREATE UNIQUE INDEX IF NOT EXISTS uq_villages_key ON villages (key);
+
+INSERT INTO villages (key, name, governorate) VALUES
+ ('quesna',               'قويسنا',              'المنوفية'),
+ ('quesna_al_balad',      'قويسنا البلد',        'المنوفية'),
+ ('mit_bara',             'ميت برة',             'المنوفية'),
+ ('abnhas',               'أبنهس',               'المنوفية'),
+ ('ashlim',               'أشليم',               'المنوفية'),
+ ('kafr_whab',            'كفر وهب',             'المنوفية'),
+ ('begerm',               'بجيرم',               'المنوفية'),
+ ('tokh_tanbasha',        'طوخ طنبشا',           'المنوفية'),
+ ('sharanis',             'شرانيس',              'المنوفية'),
+ ('arab_al_raml',         'عرب الرمل',           'المنوفية'),
+ ('ramali',               'الرمالي',             'المنوفية'),
+ ('kafr_sheikh_ibrahim',  'كفر الشيخ إبراهيم',   'المنوفية'),
+ ('mit_abu_shikha',       'ميت أبو شيخة',        'المنوفية'),
+ ('manshaet_abu_zikry',   'منشأة أبو ذكرى',      'المنوفية'),
+ ('kafr_mit_sarag',       'كفر ميت سراج',        'المنوفية'),
+ ('damlo',                'دملو',                'المنوفية'),
+ ('el_halamsha',          'الحلامشة',            'المنوفية'),
+ ('kafr_el_arab',         'كفر العرب',           'المنوفية'),
+ ('om_henan',             'أم خنان',             'المنوفية'),
+ ('kafr_abdo',            'كفر عبده',            'المنوفية'),
+ ('shabraqas',            'شبراقاص',             'المنوفية')
+ON CONFLICT (key) DO UPDATE SET name = EXCLUDED.name, governorate = EXCLUDED.governorate, is_active = true;
+
+-- نظافة: انقل أي مستخدم على قرية قديمة (بدون key) لقويسنا، ثم احذف القرى القديمة
+UPDATE users SET village_id = (SELECT id FROM villages WHERE key = 'quesna')
+ WHERE village_id IN (SELECT id FROM villages WHERE key IS NULL);
+DELETE FROM villages WHERE key IS NULL;
 
 -- ============================================================================
 --  الكتالوج: التجّار + المنتجات + الأحجام + الأقسام + العروض  (Customer API)

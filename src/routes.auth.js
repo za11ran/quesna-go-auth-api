@@ -85,6 +85,7 @@ const PROFILE_SELECT = `
          u.status,
          u.village_id,
          v.name             AS village_name,
+         v.key              AS village_key,
          u.created_at,
          u.updated_at,
          u.phone_verified_at
@@ -111,7 +112,7 @@ function shapeUser(row) {
  * ------------------------------------------------------------------------- */
 router.post('/register', authLimiter, form, async (req, res, next) => {
   try {
-    const { name, phone, village_id } = req.body || {};
+    const { name, phone, village_id, village_key } = req.body || {};
 
     if (!name || String(name).trim().length < 2) {
       return fail(res, 422, 'NAME_REQUIRED', 'الاسم مطلوب (حرفين على الأقل)');
@@ -120,17 +121,27 @@ router.post('/register', authLimiter, form, async (req, res, next) => {
     const p = normalizeEgyptPhone(phone);
     if (!p.ok) return fail(res, 422, 'INVALID_PHONE', p.error);
 
-    const vid = Number(village_id);
-    if (!Number.isInteger(vid) || vid <= 0) {
-      return fail(res, 422, 'VILLAGE_REQUIRED', 'اختر القرية');
+    // القرية: يقبل village_id (رقم) أو village_key (slug ثابت من التطبيق)
+    let village;
+    if (village_key !== undefined && String(village_key).trim() !== '') {
+      village = await db.query(
+        'SELECT id FROM villages WHERE key = $1 AND is_active = true',
+        [String(village_key).trim()]
+      );
+    } else {
+      const vid = Number(village_id);
+      if (!Number.isInteger(vid) || vid <= 0) {
+        return fail(res, 422, 'VILLAGE_REQUIRED', 'اختر القرية');
+      }
+      village = await db.query(
+        'SELECT id FROM villages WHERE id = $1 AND is_active = true',
+        [vid]
+      );
     }
-    const village = await db.query(
-      'SELECT id FROM villages WHERE id = $1 AND is_active = true',
-      [vid]
-    );
     if (village.rowCount === 0) {
       return fail(res, 422, 'VILLAGE_NOT_FOUND', 'القرية غير موجودة');
     }
+    const vid = village.rows[0].id;
 
     // اللغة: query parameter اختياري (?lang=ar) يبعته التطبيق تلقائيًا
     // (لغة الواجهة الحالية). الافتراضي 'ar'. مقبول في الـ body كمان كـ fallback.
@@ -239,7 +250,7 @@ router.post('/verify-otp', authLimiter, form, async (req, res, next) => {
     }
 
     const u = await db.query(
-      `SELECT u.*, v.name AS village_name
+      `SELECT u.*, v.name AS village_name, v.key AS village_key
          FROM users u
          LEFT JOIN villages v ON v.id = u.village_id
         WHERE u.phone = $1`,
@@ -318,6 +329,7 @@ router.post('/verify-otp', authLimiter, form, async (req, res, next) => {
         lang: user.preferred_language,
         village_id: user.village_id,
         village_name: user.village_name,
+        village_key: user.village_key,
         status: 'active',
         created_at: user.created_at,
         is_new: !user.phone_verified_at,
@@ -426,7 +438,14 @@ router.patch('/me', authRequired, form, async (req, res, next) => {
       add('gender', g);
     }
 
-    if (b.village_id !== undefined) {
+    if (b.village_key !== undefined && String(b.village_key).trim() !== '') {
+      const vk = await db.query(
+        'SELECT id FROM villages WHERE key = $1 AND is_active = true',
+        [String(b.village_key).trim()]
+      );
+      if (!vk.rowCount) return fail(res, 422, 'VILLAGE_NOT_FOUND', 'القرية غير موجودة');
+      add('village_id', vk.rows[0].id);
+    } else if (b.village_id !== undefined) {
       const vid = Number(b.village_id);
       if (!Number.isInteger(vid) || vid <= 0) {
         return fail(res, 422, 'VILLAGE_NOT_FOUND', 'قرية غير صحيحة');

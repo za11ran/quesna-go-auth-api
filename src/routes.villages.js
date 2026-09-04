@@ -5,10 +5,10 @@ const db = require('./db');
 router.get('/', async (req, res, next) => {
   try {
     const { rows } = await db.query(
-      `SELECT id, name, governorate
+      `SELECT id, key, name, governorate
          FROM villages
         WHERE is_active = true
-     ORDER BY name`
+     ORDER BY id`
     );
     res.json({ success: true, count: rows.length, villages: rows });
   } catch (err) {

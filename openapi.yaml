@@ -51,10 +51,10 @@ paths:
             application/json:
               example:
                 success: true
-                count: 30
+                count: 21
                 villages:
-                  - { id: 1, name: "كفر داود", governorate: "المنوفية" }
-                  - { id: 2, name: "ميت أبو الكوم", governorate: "المنوفية" }
+                  - { id: 1, key: "quesna", name: "قويسنا", governorate: "المنوفية" }
+                  - { id: 2, key: "quesna_al_balad", name: "قويسنا البلد", governorate: "المنوفية" }
               schema:
                 type: object
                 properties:
@@ -66,6 +66,7 @@ paths:
                       type: object
                       properties:
                         id: { type: integer }
+                        key: { type: string, description: "slug ثابت — يمكن إرساله في register كـ village_key" }
                         name: { type: string }
                         governorate: { type: string }
 
@@ -92,16 +93,19 @@ paths:
             example:
               name: "أحمد محمد"
               phone: "01065465118"
-              village_id: 1
+              village_key: "quesna"
             schema:
               type: object
-              required: [name, phone, village_id]
+              required: [name, phone]
               properties:
                 name: { type: string }
                 phone:
                   type: string
                   description: Egyptian mobile. Accepts 01065465118, 1065465118 or +201065465118
-                village_id: { type: integer }
+                village_key:
+                  type: string
+                  description: "slug القرية من GET /api/villages (مفضّل). أرسل ده أو village_id."
+                village_id: { type: integer, description: "بديل عن village_key" }
       responses:
         '201':
           description: Account created, OTP sent
