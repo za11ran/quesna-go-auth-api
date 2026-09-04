@@ -170,6 +170,11 @@ CREATE TABLE IF NOT EXISTS vendors (
 -- 'manual' = المتجر مالوش تطبيق بيستخدمه؛ الطلب يتخصم مخزونه فورًا ويروح على طول
 --            لطابور التوزيع، والمشرف هو اللي بيتصل بالمطعم تليفونيًا ويبعت الدليفري.
 ALTER TABLE vendors ADD COLUMN IF NOT EXISTS order_mode VARCHAR(10) NOT NULL DEFAULT 'app';
+-- التاجر ده "موثوق" — كل تعديلاته (اسم/وصف/صور/منتجات جديدة/حذف/أحجام) بتتطبّق فورًا
+-- من غير ما تحتاج موافقة الأدمن على Change Request. الأدمن بيتحكم فيها في أي وقت من
+-- لوحة «التجّار». السعر والكمية ومواعيد الفتح/الغلق والعروض فورية لكل التجّار بغض
+-- النظر عن العلامة دي (شوف src/vendor.js).
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS full_permissions BOOLEAN NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS idx_vendors_type   ON vendors(type) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_vendors_status ON vendors(status);
 

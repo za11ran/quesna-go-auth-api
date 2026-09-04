@@ -7,6 +7,7 @@ export default function Staff({ kind }) {
   const isDriver = kind === 'drivers';
   const { data, loading, error, reload } = useAsync(() => api.get(`/api/admin/${kind}`), [kind]);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState(null);
   const rows = data?.data || [];
 
   return (
@@ -21,10 +22,10 @@ export default function Staff({ kind }) {
       <ErrBox error={error} />
       <div className="card" style={{ overflow: 'auto' }}>
         <table>
-          <thead><tr><th>الاسم</th><th>الموبايل</th><th>الإيميل</th>{isDriver && <th>الحالة</th>}{isDriver && <th>توصيلات</th>}<th>مفعّل؟</th></tr></thead>
+          <thead><tr><th>الاسم</th><th>الموبايل</th><th>الإيميل</th>{isDriver && <th>الحالة</th>}{isDriver && <th>توصيلات</th>}<th>مفعّل؟</th><th></th></tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={6} className="empty">تحميل…</td></tr>
-              : rows.length === 0 ? <tr><td colSpan={6}><Empty /></td></tr>
+            {loading ? <tr><td colSpan={7} className="empty">تحميل…</td></tr>
+              : rows.length === 0 ? <tr><td colSpan={7}><Empty /></td></tr>
               : rows.map((r) => (
                 <tr key={r.id}>
                   <td>{r.name}</td>
@@ -33,13 +34,47 @@ export default function Staff({ kind }) {
                   {isDriver && <td><Pill tone={statusTone(r.status)}>{r.status}</Pill></td>}
                   {isDriver && <td>{r.deliveries_count}</td>}
                   <td>{(isDriver ? r.account_active : r.is_active) === false ? '✕' : '✓'}</td>
+                  <td><button className="btn sm" onClick={() => setEditing(r)}>تعديل</button></td>
                 </tr>
               ))}
           </tbody>
         </table>
       </div>
       {creating && <CreateStaff isDriver={isDriver} onClose={() => setCreating(false)} onDone={() => { setCreating(false); reload(); }} />}
+      {editing && (
+        <EditStaff
+          staffId={isDriver ? editing.staff_user_id : editing.id}
+          row={editing}
+          onClose={() => setEditing(null)}
+          onDone={() => { setEditing(null); reload(); }}
+        />
+      )}
     </>
+  );
+}
+
+function EditStaff({ staffId, row, onClose, onDone }) {
+  const [f, setF] = useState({ name: row.name || '', email: row.email || '', phone: row.phone || '', password: '' });
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(null);
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  async function submit() {
+    setBusy(true); setError(null);
+    try {
+      const body = { name: f.name, email: f.email || null, phone: f.phone || null };
+      if (f.password) body.password = f.password;
+      await api.put(`/api/admin/staff/${staffId}`, body);
+      onDone();
+    } catch (e) { setError(e); } finally { setBusy(false); }
+  }
+  return (
+    <Modal title="تعديل الحساب" onClose={onClose}
+      footer={<button className="btn primary" disabled={busy || !f.name} onClick={submit}>حفظ</button>}>
+      <ErrBox error={error} />
+      <Field label="الاسم"><input value={f.name} onChange={set('name')} /></Field>
+      <Field label="الموبايل"><input value={f.phone} onChange={set('phone')} /></Field>
+      <Field label="الإيميل"><input value={f.email} onChange={set('email')} /></Field>
+      <Field label="كلمة سر جديدة (سيبها فاضية لو مش هتغيّرها)"><input value={f.password} onChange={set('password')} /></Field>
+    </Modal>
   );
 }
 

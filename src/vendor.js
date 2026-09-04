@@ -10,7 +10,7 @@ const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const { signStaffToken, staffAuth } = require('./staff-auth');
-const { submitChangeRequest, vendorFieldsNeedApproval, productFieldsNeedApproval } = require('./changeRequests');
+const { submitChangeRequest, vendorFieldsNeedApproval, productFieldsNeedApproval, hasFullPermissions } = require('./changeRequests');
 const { loadOrder, serializeOrder, setStatus } = require('./orderView');
 const { notify } = require('./notify');
 const { emitTo } = require('./realtime');
@@ -100,7 +100,8 @@ router.put('/profile', vendorRole, async (req, res, next) => {
     }
     if (!Object.keys(changes).length) return fail(res, 422, 'NOTHING_TO_UPDATE', 'مفيش تعديلات');
 
-    if (await vendorFieldsNeedApproval(Object.keys(changes))) {
+    const full = await hasFullPermissions(req.staff.vendor_id);
+    if (!full && (await vendorFieldsNeedApproval(Object.keys(changes)))) {
       const out = await submitChangeRequest({
         vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
         entityType: 'vendor', entityId: req.staff.vendor_id, action: 'update',
@@ -109,7 +110,7 @@ router.put('/profile', vendorRole, async (req, res, next) => {
       });
       return res.status(202).json(out);
     }
-    // كله حقول غير حسّاسة -> فوري
+    // full_permissions أو كله حقول غير حسّاسة -> فوري
     const cols = Object.keys(changes);
     await db.query(
       `UPDATE vendors SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')}, updated_at = now() WHERE id = $${cols.length + 1}`,
@@ -121,11 +122,16 @@ router.put('/profile', vendorRole, async (req, res, next) => {
   }
 });
 
-// رفع لوجو/غلاف — الصورة تترفع فورًا لكن تظهر بعد موافقة الأدمن (Change Request)
+// رفع لوجو/غلاف — الصورة تترفع فورًا؛ تظهر فورًا لو full_permissions، وإلا بعد موافقة
+// الأدمن (Change Request)
 async function vendorImageCR(req, res, field, opts) {
   if (req.staff.role !== 'vendor_owner') return fail(res, 403, 'FORBIDDEN', 'صلاحية غير كافية');
   if (!req.file) return fail(res, 422, 'IMAGE_REQUIRED', 'الصورة مطلوبة');
   const img = await saveImage(req.file, opts);
+  if (await hasFullPermissions(req.staff.vendor_id)) {
+    await db.query(`UPDATE vendors SET ${field} = $2, updated_at = now() WHERE id = $1`, [req.staff.vendor_id, img.url]);
+    return res.json({ success: true, url: img.url });
+  }
   const cur = (await db.query(`SELECT ${field} FROM vendors WHERE id = $1`, [req.staff.vendor_id])).rows[0] || {};
   const out = await submitChangeRequest({
     vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
@@ -235,19 +241,30 @@ router.patch('/products/:id', vendorRole, async (req, res, next) => {
   }
 });
 
-// PUT — تعديل حسّاس (سعر/اسم/أحجام) -> Change Request
+// PUT — تعديل اسم/وصف/فئة/أحجام (حسّاس -> Change Request إلا لو full_permissions).
+// السعر مستثنى دايمًا: فوري لكل التجّار بغض النظر عن أي حاجة (شوف PATCH كمان للكمية).
 router.put('/products/:id', vendorRole, async (req, res, next) => {
   try {
     if (req.staff.role !== 'vendor_owner') return fail(res, 403, 'FORBIDDEN', 'صلاحية غير كافية');
     const cur = (await db.query(`SELECT * FROM products WHERE id = $1 AND vendor_id = $2 AND deleted_at IS NULL`, [req.params.id, req.staff.vendor_id])).rows[0];
     if (!cur) return fail(res, 404, 'PRODUCT_NOT_FOUND', 'المنتج غير موجود');
-
-    const allowed = ['name_ar', 'name_en', 'brand', 'description_ar', 'description_en', 'price', 'category', 'sort_order'];
     const b = req.body || {};
+
+    // السعر فوري دايمًا
+    let priceApplied = false;
+    if (b.price !== undefined) {
+      const priceVal = num(b.price);
+      if (priceVal !== null && String(cur.price ?? '') !== String(priceVal ?? '')) {
+        await db.query(`UPDATE products SET price = $2, updated_at = now() WHERE id = $1`, [req.params.id, priceVal]);
+        priceApplied = true;
+      }
+    }
+
+    const allowed = ['name_ar', 'name_en', 'brand', 'description_ar', 'description_en', 'category', 'sort_order'];
     const changes = {};
     for (const k of allowed) {
       if (b[k] === undefined) continue;
-      const val = ['price', 'sort_order'].includes(k) ? num(b[k]) : String(b[k]);
+      const val = k === 'sort_order' ? num(b[k]) : String(b[k]);
       if (String(cur[k] ?? '') !== String(val ?? '')) changes[k] = val;
     }
     let optionsChanged = null;
@@ -258,12 +275,15 @@ router.put('/products/:id', vendorRole, async (req, res, next) => {
         is_available: o.is_available !== false,
       }));
     }
-    if (!Object.keys(changes).length && !optionsChanged) return fail(res, 422, 'NOTHING_TO_UPDATE', 'مفيش تعديلات');
+    if (!Object.keys(changes).length && !optionsChanged) {
+      if (priceApplied) return res.json((await db.query(`SELECT * FROM products WHERE id = $1`, [req.params.id])).rows[0]);
+      return fail(res, 422, 'NOTHING_TO_UPDATE', 'مفيش تعديلات');
+    }
 
-    const newValues = { ...changes };
-    if (optionsChanged) newValues.options = optionsChanged;
-
-    if (optionsChanged || (await productFieldsNeedApproval(Object.keys(changes)))) {
+    const full = await hasFullPermissions(req.staff.vendor_id);
+    if (!full && (optionsChanged || (await productFieldsNeedApproval(Object.keys(changes))))) {
+      const newValues = { ...changes };
+      if (optionsChanged) newValues.options = optionsChanged;
       const out = await submitChangeRequest({
         vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
         entityType: 'product', entityId: req.params.id, action: 'update',
@@ -272,18 +292,34 @@ router.put('/products/:id', vendorRole, async (req, res, next) => {
       });
       return res.status(202).json(out);
     }
-    const cols = Object.keys(changes);
-    await db.query(
-      `UPDATE products SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')}, updated_at = now() WHERE id = $${cols.length + 1}`,
-      [...cols.map((c) => changes[c]), req.params.id]
-    );
+
+    // full_permissions (أو حقول غير حسّاسة) -> فوري
+    if (Object.keys(changes).length) {
+      const cols = Object.keys(changes);
+      await db.query(
+        `UPDATE products SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')}, updated_at = now() WHERE id = $${cols.length + 1}`,
+        [...cols.map((c) => changes[c]), req.params.id]
+      );
+    }
+    if (optionsChanged) {
+      await db.query(`DELETE FROM product_options WHERE product_id = $1`, [req.params.id]);
+      for (let i = 0; i < optionsChanged.length; i++) {
+        const o = optionsChanged[i];
+        await db.query(
+          `INSERT INTO product_options (product_id, id, name_ar, name_en, price, stock, is_available, sort_order)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [req.params.id, o.id, o.name_ar, o.name_en, o.price, o.stock ?? null, o.is_available !== false, i + 1]
+        );
+      }
+      await db.query(`UPDATE products SET has_options = $2 WHERE id = $1`, [req.params.id, optionsChanged.length > 0]);
+    }
     res.json((await db.query(`SELECT * FROM products WHERE id = $1`, [req.params.id])).rows[0]);
   } catch (e) {
     next(e);
   }
 });
 
-// POST — إضافة منتج -> Change Request
+// POST — إضافة منتج (-> Change Request إلا لو full_permissions)
 router.post('/products', vendorRole, async (req, res, next) => {
   try {
     if (req.staff.role !== 'vendor_owner') return fail(res, 403, 'FORBIDDEN', 'صلاحية غير كافية');
@@ -301,6 +337,16 @@ router.post('/products', vendorRole, async (req, res, next) => {
       is_available: b.is_available !== false, has_options: Array.isArray(b.options) && b.options.length > 0,
       sort_order: num(b.sort_order) || 0,
     };
+
+    if (await hasFullPermissions(req.staff.vendor_id)) {
+      const cols = Object.keys(newValues);
+      await db.query(
+        `INSERT INTO products (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')})`,
+        cols.map((c) => newValues[c])
+      );
+      return res.status(201).json((await db.query(`SELECT * FROM products WHERE id = $1`, [pid])).rows[0]);
+    }
+
     const out = await submitChangeRequest({
       vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
       entityType: 'product', entityId: pid, action: 'create',
@@ -312,12 +358,18 @@ router.post('/products', vendorRole, async (req, res, next) => {
   }
 });
 
-// DELETE — حذف soft -> Change Request
+// DELETE — حذف soft (-> Change Request إلا لو full_permissions)
 router.delete('/products/:id', vendorRole, async (req, res, next) => {
   try {
     if (req.staff.role !== 'vendor_owner') return fail(res, 403, 'FORBIDDEN', 'صلاحية غير كافية');
     const cur = (await db.query(`SELECT id, name_ar FROM products WHERE id = $1 AND vendor_id = $2 AND deleted_at IS NULL`, [req.params.id, req.staff.vendor_id])).rows[0];
     if (!cur) return fail(res, 404, 'PRODUCT_NOT_FOUND', 'المنتج غير موجود');
+
+    if (await hasFullPermissions(req.staff.vendor_id)) {
+      await db.query(`UPDATE products SET deleted_at = now() WHERE id = $1`, [req.params.id]);
+      return res.json({ success: true });
+    }
+
     const out = await submitChangeRequest({
       vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
       entityType: 'product', entityId: req.params.id, action: 'delete',
@@ -329,7 +381,7 @@ router.delete('/products/:id', vendorRole, async (req, res, next) => {
   }
 });
 
-// POST /vendor/products/:id/image — رفع صورة المنتج -> Change Request (تظهر بعد الموافقة)
+// POST /vendor/products/:id/image — رفع صورة المنتج (-> Change Request إلا لو full_permissions)
 router.post('/products/:id/image', vendorRole, imageUpload, async (req, res, next) => {
   try {
     if (req.staff.role !== 'vendor_owner') return fail(res, 403, 'FORBIDDEN', 'صلاحية غير كافية');
@@ -337,6 +389,12 @@ router.post('/products/:id/image', vendorRole, imageUpload, async (req, res, nex
     if (!cur) return fail(res, 404, 'PRODUCT_NOT_FOUND', 'المنتج غير موجود');
     if (!req.file) return fail(res, 422, 'IMAGE_REQUIRED', 'الصورة مطلوبة');
     const img = await saveImage(req.file, { folder: 'products', width: 1000 });
+
+    if (await hasFullPermissions(req.staff.vendor_id)) {
+      await db.query(`UPDATE products SET image = $2, updated_at = now() WHERE id = $1`, [req.params.id, img.url]);
+      return res.json({ success: true, url: img.url });
+    }
+
     const out = await submitChangeRequest({
       vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
       entityType: 'product', entityId: req.params.id, action: 'update',
@@ -404,7 +462,7 @@ router.delete('/menu-sections/:id', vendorRole, async (req, res, next) => {
   }
 });
 
-/* -------- offers (§8.4) — كلها Change Request -------- */
+/* -------- offers (§8.4) — فورية دايمًا (بدون Change Request) -------- */
 const OFFER_FIELDS = ['title_ar', 'title_en', 'description_ar', 'description_en', 'banner_image',
   'scope', 'target_id', 'discount_type', 'discount_value', 'starts_at', 'ends_at', 'is_active'];
 
@@ -435,11 +493,12 @@ router.post('/offers', vendorRole, async (req, res, next) => {
       starts_at: b.starts_at || null, ends_at: b.ends_at || null,
       is_active: b.is_active !== false,
     };
-    const out = await submitChangeRequest({
-      vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
-      entityType: 'offer', entityId: id, action: 'create', currentValues: {}, newValues: nv,
-    });
-    res.status(202).json(out);
+    const cols = Object.keys(nv);
+    const { rows } = await db.query(
+      `INSERT INTO offers (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING *`,
+      cols.map((c) => nv[c])
+    );
+    res.status(201).json(rows[0]);
   } catch (e) { next(e); }
 });
 
@@ -456,26 +515,21 @@ router.put('/offers/:id', vendorRole, async (req, res, next) => {
       if (String(cur[k] ?? '') !== String(val ?? '')) changes[k] = val;
     }
     if (!Object.keys(changes).length) return fail(res, 422, 'NOTHING_TO_UPDATE', 'مفيش تعديلات');
-    const out = await submitChangeRequest({
-      vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
-      entityType: 'offer', entityId: req.params.id, action: 'update',
-      currentValues: Object.fromEntries(Object.keys(changes).map((k) => [k, cur[k]])), newValues: changes,
-    });
-    res.status(202).json(out);
+    const cols = Object.keys(changes);
+    const { rows } = await db.query(
+      `UPDATE offers SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')} WHERE id = $${cols.length + 1} AND vendor_id = $${cols.length + 2} RETURNING *`,
+      [...cols.map((c) => changes[c]), req.params.id, req.staff.vendor_id]
+    );
+    res.json(rows[0]);
   } catch (e) { next(e); }
 });
 
 router.delete('/offers/:id', vendorRole, async (req, res, next) => {
   try {
     if (req.staff.role !== 'vendor_owner') return fail(res, 403, 'FORBIDDEN', 'صلاحية غير كافية');
-    const cur = (await db.query(`SELECT id, title_ar FROM offers WHERE id = $1 AND vendor_id = $2`, [req.params.id, req.staff.vendor_id])).rows[0];
-    if (!cur) return fail(res, 404, 'OFFER_NOT_FOUND', 'العرض غير موجود');
-    const out = await submitChangeRequest({
-      vendorId: req.staff.vendor_id, submittedBy: req.staff.id,
-      entityType: 'offer', entityId: req.params.id, action: 'delete',
-      currentValues: { id: cur.id, title_ar: cur.title_ar }, newValues: {},
-    });
-    res.status(202).json(out);
+    const r = await db.query(`DELETE FROM offers WHERE id = $1 AND vendor_id = $2`, [req.params.id, req.staff.vendor_id]);
+    if (!r.rowCount) return fail(res, 404, 'OFFER_NOT_FOUND', 'العرض غير موجود');
+    res.json({ success: true });
   } catch (e) { next(e); }
 });
 

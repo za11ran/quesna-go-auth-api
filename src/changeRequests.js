@@ -3,10 +3,12 @@ const db = require('./db');
 const { notify } = require('./notify');
 const { sendEmail } = require('./mailer');
 
+// السعر والكمية ومواعيد الفتح/الغلق والعروض فورية دايمًا لكل التجّار (مش موجودين هنا
+// أصلًا) — بغض النظر عن القيم تحت أو عن vendors.full_permissions. شوف src/vendor.js.
 const DEFAULT_RULES = {
   vendor_fields: ['name_ar', 'name_en', 'delivery_fee', 'min_order', 'logo', 'cover_image', 'description_ar', 'description_en'],
   product_create: true,
-  product_update_fields: ['name_ar', 'name_en', 'price', 'category', 'description_ar', 'description_en'],
+  product_update_fields: ['name_ar', 'name_en', 'category', 'description_ar', 'description_en'],
   product_delete: true,
   product_options: true,
   offers: true,
@@ -30,6 +32,12 @@ async function vendorFieldsNeedApproval(changedKeys) {
 async function productFieldsNeedApproval(changedKeys) {
   const r = await rules();
   return changedKeys.some((k) => r.product_update_fields.includes(k));
+}
+
+// متجر "موثوق" (full_permissions) — كل تعديلاته فورية، مفيش Change Request خالص.
+async function hasFullPermissions(vendorId) {
+  const { rows } = await db.query(`SELECT full_permissions FROM vendors WHERE id = $1`, [vendorId]);
+  return !!(rows[0] && rows[0].full_permissions);
 }
 
 async function nextCrId() {
@@ -138,4 +146,7 @@ async function applyChangeRequest(cr) {
   }
 }
 
-module.exports = { submitChangeRequest, applyChangeRequest, vendorFieldsNeedApproval, productFieldsNeedApproval, rules };
+module.exports = {
+  submitChangeRequest, applyChangeRequest, vendorFieldsNeedApproval, productFieldsNeedApproval,
+  rules, hasFullPermissions,
+};

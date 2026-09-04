@@ -255,6 +255,58 @@ router.put('/vendors/:id/order-mode', adminOnly, async (req, res, next) => {
   }
 });
 
+// "صلاحيات كاملة" — تعديلات المتجر ده (اسم/وصف/صور/منتجات جديدة/حذف/أحجام) تتطبّق
+// فورًا من غير Change Request. قابلة للتعديل في أي وقت. شوف src/changeRequests.js.
+router.put('/vendors/:id/full-permissions', adminOnly, async (req, res, next) => {
+  try {
+    const enabled = (req.body || {}).full_permissions === true || (req.body || {}).full_permissions === 'true';
+    const r = await db.query(
+      `UPDATE vendors SET full_permissions = $2, updated_at = now() WHERE id = $1 RETURNING id, full_permissions`,
+      [req.params.id, enabled]
+    );
+    if (!r.rowCount) return fail(res, 404, 'VENDOR_NOT_FOUND', 'المتجر غير موجود');
+    res.json({ success: true, full_permissions: r.rows[0].full_permissions });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// تعديل بيانات المتجر مباشرة (الأدمن هو المُوافِق أصلًا، فمفيش داعي لـ Change Request)
+router.put('/vendors/:id', adminOnly, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const cols = [];
+    const params = [];
+    for (const k of ['name_ar', 'name_en', 'description_ar', 'description_en', 'phone',
+      'delivery_fee', 'min_order', 'avg_prep_time_minutes', 'address_ar', 'address_en']) {
+      if (b[k] === undefined) continue;
+      params.push(['delivery_fee', 'min_order', 'avg_prep_time_minutes'].includes(k) ? num(b[k]) : String(b[k]));
+      cols.push(`${k} = $${params.length}`);
+    }
+    if (!cols.length) return fail(res, 422, 'NOTHING_TO_UPDATE', 'مفيش تعديلات');
+    params.push(req.params.id);
+    const { rows } = await db.query(`UPDATE vendors SET ${cols.join(', ')}, updated_at = now() WHERE id = $${params.length} RETURNING *`, params);
+    if (!rows.length) return fail(res, 404, 'VENDOR_NOT_FOUND', 'المتجر غير موجود');
+    res.json(rows[0]);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// حسابات دخول المتجر ده (صاحبه + موظفينه) — لعرضها وتعديل اسمها/باسوردها من لوحة الأدمن
+router.get('/vendors/:id/staff', adminOnly, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, name, email, phone, role, is_active, last_login_at
+         FROM staff_users WHERE vendor_id = $1 ORDER BY (role = 'vendor_owner') DESC, created_at`,
+      [req.params.id]
+    );
+    res.json({ data: rows });
+  } catch (e) {
+    next(e);
+  }
+});
+
 /* -------- products list (لاختيار الأكثر طلبًا) -------- */
 router.get('/products', adminOnly, async (req, res, next) => {
   try {
@@ -502,6 +554,47 @@ router.post('/dispatchers', adminOnly, async (req, res, next) => {
       [String(b.name), b.email || null, b.phone || null, hash]
     );
     res.status(201).json(rows[0]);
+  } catch (e) {
+    if (e.code === '23505') return fail(res, 409, 'EXISTS', 'الإيميل أو الموبايل مستخدم');
+    next(e);
+  }
+});
+
+// تعديل عام لأي حساب لوحة (أدمن/مشرف/دليفري/صاحب متجر/موظف متجر) — الاسم و/أو الباسورد.
+// لو الحساب دليفري، بيحدّث نسخة الاسم/الموبايل في جدول drivers كمان عشان تفضل متطابقة.
+router.put('/staff/:id', adminOnly, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const cols = [];
+    const params = [];
+    if (b.name !== undefined && String(b.name).trim()) { params.push(String(b.name).trim()); cols.push(`name = $${params.length}`); }
+    if (b.email !== undefined) { params.push(b.email ? String(b.email).trim() : null); cols.push(`email = $${params.length}`); }
+    if (b.phone !== undefined) { params.push(b.phone ? String(b.phone).trim() : null); cols.push(`phone = $${params.length}`); }
+    if (b.password) {
+      const hash = await bcrypt.hash(String(b.password), 10);
+      params.push(hash); cols.push(`password_hash = $${params.length}`);
+    }
+    if (!cols.length) return fail(res, 422, 'NOTHING_TO_UPDATE', 'مفيش تعديلات');
+    params.push(req.params.id);
+    const { rows } = await db.query(
+      `UPDATE staff_users SET ${cols.join(', ')}, updated_at = now() WHERE id = $${params.length}
+       RETURNING id, name, email, phone, role, vendor_id, driver_id, is_active`,
+      params
+    );
+    if (!rows.length) return fail(res, 404, 'STAFF_NOT_FOUND', 'الحساب غير موجود');
+
+    const staff = rows[0];
+    if (staff.role === 'driver' && staff.driver_id && (b.name !== undefined || b.phone !== undefined)) {
+      const dCols = [];
+      const dParams = [];
+      if (b.name !== undefined && String(b.name).trim()) { dParams.push(String(b.name).trim()); dCols.push(`name = $${dParams.length}`); }
+      if (b.phone !== undefined && b.phone) { dParams.push(String(b.phone).trim()); dCols.push(`phone = $${dParams.length}`); }
+      if (dCols.length) {
+        dParams.push(staff.driver_id);
+        await db.query(`UPDATE drivers SET ${dCols.join(', ')}, updated_at = now() WHERE id = $${dParams.length}`, dParams);
+      }
+    }
+    res.json(staff);
   } catch (e) {
     if (e.code === '23505') return fail(res, 409, 'EXISTS', 'الإيميل أو الموبايل مستخدم');
     next(e);
