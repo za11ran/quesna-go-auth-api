@@ -51,6 +51,7 @@
 | `GET /api/vendors/:id` | تفاصيل متجر |
 | `GET /api/vendors/:id/products?category=&search=&page=` | منتجات متجر |
 | `GET /api/vendors/:id/products/:productId` | تفاصيل منتج + الأحجام/الأنواع (`options`) |
+| `GET /api/vendors/:id/menu-sections` | أقسام قائمة المطعم (بيتزا/برجر/مشويات...) — كل منتج بيرجّع `menu_section_id` بيشاور عليها |
 | `GET /api/products/most-requested?limit=` | الأكثر طلبًا (الأدمن بيختارهم) |
 | `GET /api/offers` | كل العروض الفعّالة |
 

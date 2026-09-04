@@ -114,6 +114,7 @@ function serializeProduct(p, options, offers, lang) {
     price,
     image: p.image || null,
     category: p.category || null,
+    menu_section_id: p.menu_section_id || null,
     stock: p.stock === null || p.stock === undefined ? null : Number(p.stock),
     is_available: p.is_available,
     has_options: p.has_options,
@@ -253,6 +254,30 @@ router.get('/vendors/:id/products/:productId', async (req, res, next) => {
     const opts = await loadOptions([rows[0].id]);
     const offers = await loadOffers(req.params.id);
     res.json(serializeProduct(rows[0], opts[rows[0].id], offers, lang));
+  } catch (e) {
+    next(e);
+  }
+});
+
+/* ---------------- GET /api/vendors/:id/menu-sections ---------------- */
+// أقسام قائمة المطعم (بيتزا/برجر/مشويات...) — يديرها التاجر من لوحته.
+router.get('/vendors/:id/menu-sections', async (req, res, next) => {
+  try {
+    const lang = langOf(req);
+    const { rows } = await db.query(
+      `SELECT id, name_ar, name_en, sort_order FROM menu_sections
+        WHERE vendor_id = $1 ORDER BY sort_order, id`,
+      [req.params.id]
+    );
+    res.json({
+      data: rows.map((s) => ({
+        id: s.id,
+        name: s[`name_${lang}`] || s.name_ar,
+        name_ar: s.name_ar,
+        name_en: s.name_en,
+        sort_order: s.sort_order,
+      })),
+    });
   } catch (e) {
     next(e);
   }

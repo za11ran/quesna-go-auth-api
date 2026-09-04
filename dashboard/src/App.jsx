@@ -14,6 +14,7 @@ import Staff from './pages/admin/Staff';
 import AdminOrders from './pages/admin/Orders';
 
 import VendorProducts from './pages/vendor/Products';
+import VendorMenuSections from './pages/vendor/MenuSections';
 import VendorOrders from './pages/vendor/Orders';
 import VendorOffers from './pages/vendor/Offers';
 import VendorProfile from './pages/vendor/Profile';
@@ -57,6 +58,7 @@ export default function App() {
 
         <Route path="/vendor" element={<VendorOrders />} />
         <Route path="/vendor/products" element={<VendorProducts />} />
+        <Route path="/vendor/menu-sections" element={<VendorMenuSections />} />
         <Route path="/vendor/offers" element={<VendorOffers />} />
         <Route path="/vendor/profile" element={<VendorProfile />} />
         <Route path="/vendor/change-requests" element={<VendorChangeRequests />} />

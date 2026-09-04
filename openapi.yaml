@@ -449,6 +449,34 @@ paths:
           description: Not found
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
 
+  /api/vendors/{id}/menu-sections:
+    get:
+      tags: [Catalog]
+      operationId: listMenuSections
+      summary: Restaurant menu sections (Pizza, Burgers, Grills…)
+      description: Vendor-defined, editable from the vendor dashboard. Products reference one via `menu_section_id`.
+      parameters:
+        - $ref: '#/components/parameters/LangHeader'
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        name: { type: string }
+                        name_ar: { type: string }
+                        name_en: { type: string }
+                        sort_order: { type: integer }
+
   /api/home/categories:
     get:
       tags: [Catalog]
@@ -992,6 +1020,7 @@ components:
         price: { type: number }
         image: { type: string, nullable: true }
         category: { type: string, nullable: true }
+        menu_section_id: { type: integer, nullable: true, description: "قسم قائمة المطعم — من GET /api/vendors/{id}/menu-sections" }
         stock: { type: integer, nullable: true, description: "null = غير محدود" }
         is_available: { type: boolean }
         has_options: { type: boolean }

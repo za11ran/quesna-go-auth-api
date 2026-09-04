@@ -170,6 +170,20 @@ CREATE TABLE IF NOT EXISTS product_options (
     PRIMARY KEY (product_id, id)
 );
 
+-- ---------- أقسام قائمة المطعم (لكل تاجر، يديرها من لوحته) ----------
+CREATE TABLE IF NOT EXISTS menu_sections (
+    id          SERIAL PRIMARY KEY,
+    vendor_id   VARCHAR(60) NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
+    name_ar     VARCHAR(80) NOT NULL,
+    name_en     VARCHAR(80) NOT NULL DEFAULT '',
+    sort_order  SMALLINT NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_menu_sections_vendor ON menu_sections(vendor_id);
+
+ALTER TABLE products ADD COLUMN IF NOT EXISTS menu_section_id INTEGER REFERENCES menu_sections(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_products_menu_section ON products(menu_section_id);
+
 CREATE TABLE IF NOT EXISTS offers (
     id             VARCHAR(60) PRIMARY KEY,
     vendor_id      VARCHAR(60) NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,

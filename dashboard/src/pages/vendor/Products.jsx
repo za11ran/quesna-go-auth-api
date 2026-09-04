@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, apiBase } from '../../api';
 import { useAsync, ErrBox, Empty, Pill, Modal, Field, Money } from '../../ui';
 
@@ -6,11 +7,16 @@ const CATS = ['grocery', 'dairyAndCheese', 'cleaning', 'beverages', 'snacks', 'f
 
 export default function VendorProducts() {
   const { data, loading, error, reload } = useAsync(() => api.get('/api/vendor/products?per_page=100'));
+  const { data: vendorData } = useAsync(() => api.get('/api/vendor/profile'));
+  const { data: sectionsData } = useAsync(() => api.get('/api/vendor/menu-sections'));
   const [edit, setEdit] = useState(null);      // product for edit modal
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
   const rows = data?.data || [];
+  const isRestaurant = vendorData?.type === 'restaurant';
+  const sections = sectionsData?.data || [];
+  const colCount = isRestaurant ? 8 : 7;
 
   const patch = useCallback(async (id, patchBody) => {
     setBusy(id); setMsg(null);
@@ -27,14 +33,19 @@ export default function VendorProducts() {
         </div>
         <button className="btn primary" onClick={() => setCreating(true)}>+ منتج</button>
       </div>
+      {isRestaurant && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <Link to="/vendor/menu-sections" className="btn sm">إدارة أقسام القائمة (بيتزا، برجر...)</Link>
+        </div>
+      )}
       <ErrBox error={error} />
       {msg && <div className="err">{msg}</div>}
       <div className="card" style={{ overflow: 'auto' }}>
         <table>
-          <thead><tr><th>المنتج</th><th>السعر</th><th>القسم</th><th>الكمية</th><th>متاح؟</th><th>حالة</th><th></th></tr></thead>
+          <thead><tr><th>المنتج</th><th>السعر</th><th>القسم</th>{isRestaurant && <th>قسم القائمة</th>}<th>الكمية</th><th>متاح؟</th><th>حالة</th><th></th></tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={7} className="empty">تحميل…</td></tr>
-              : rows.length === 0 ? <tr><td colSpan={7}><Empty /></td></tr>
+            {loading ? <tr><td colSpan={colCount} className="empty">تحميل…</td></tr>
+              : rows.length === 0 ? <tr><td colSpan={colCount}><Empty /></td></tr>
               : rows.map((p) => (
                 <tr key={p.id}>
                   <td className="row">
@@ -43,6 +54,15 @@ export default function VendorProducts() {
                   </td>
                   <td><Money v={p.price} /></td>
                   <td>{p.category || '—'}</td>
+                  {isRestaurant && (
+                    <td style={{ width: 140 }}>
+                      <select value={p.menu_section_id || ''} disabled={busy === p.id}
+                        onChange={(e) => patch(p.id, { menu_section_id: e.target.value || null })}>
+                        <option value="">بدون قسم</option>
+                        {sections.map((s) => <option key={s.id} value={s.id}>{s.name_ar}</option>)}
+                      </select>
+                    </td>
+                  )}
                   <td style={{ width: 130 }}>
                     <input type="number" defaultValue={p.stock ?? ''} placeholder="∞" style={{ width: 70 }}
                       onBlur={(e) => {

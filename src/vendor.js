@@ -4,6 +4,7 @@
 //   GET  /vendor/profile        PUT /vendor/profile        PUT /vendor/profile/status
 //   GET  /vendor/products       POST /vendor/products
 //   PUT  /vendor/products/:id   PATCH /vendor/products/:id  DELETE /vendor/products/:id
+//   GET/POST/PUT/DELETE /vendor/menu-sections[/:id]  (أقسام قائمة المطعم — فوري)
 //   GET  /vendor/change-requests  POST /vendor/change-requests/:id/cancel
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
@@ -213,6 +214,18 @@ router.patch('/products/:id', vendorRole, async (req, res, next) => {
     const params = [];
     if (b.stock !== undefined) { params.push(b.stock === null ? null : parseInt(b.stock, 10)); set.push(`stock = $${params.length}`); }
     if (b.is_available !== undefined) { params.push(b.is_available === true || b.is_available === 'true'); set.push(`is_available = $${params.length}`); }
+    if (b.menu_section_id !== undefined) {
+      if (b.menu_section_id === null || b.menu_section_id === '') {
+        params.push(null);
+        set.push(`menu_section_id = $${params.length}`);
+      } else {
+        const sid = parseInt(b.menu_section_id, 10);
+        const ok = await db.query(`SELECT 1 FROM menu_sections WHERE id = $1 AND vendor_id = $2`, [sid, req.staff.vendor_id]);
+        if (!ok.rowCount) return fail(res, 422, 'MENU_SECTION_NOT_FOUND', 'القسم غير موجود');
+        params.push(sid);
+        set.push(`menu_section_id = $${params.length}`);
+      }
+    }
     if (!set.length) return fail(res, 422, 'NOTHING_TO_UPDATE', 'مفيش تعديلات فورية');
     params.push(req.params.id);
     await db.query(`UPDATE products SET ${set.join(', ')}, updated_at = now() WHERE id = $${params.length}`, params);
@@ -331,6 +344,64 @@ router.post('/products/:id/image', vendorRole, imageUpload, async (req, res, nex
     });
     res.status(202).json({ ...out, url: img.url });
   } catch (e) { next(e); }
+});
+
+/* -------- menu sections (أقسام قائمة المطعم: بيتزا/برجر/مشويات...) --------
+   تنظيمية فقط (زي مواعيد العمل) — تعديل فوري بدون Change Request. */
+router.get('/menu-sections', vendorRole, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT * FROM menu_sections WHERE vendor_id = $1 ORDER BY sort_order, id`,
+      [req.staff.vendor_id]
+    );
+    res.json({ data: rows });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/menu-sections', vendorRole, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    if (!b.name_ar || !String(b.name_ar).trim()) return fail(res, 422, 'NAME_REQUIRED', 'اسم القسم مطلوب');
+    const { rows } = await db.query(
+      `INSERT INTO menu_sections (vendor_id, name_ar, name_en, sort_order)
+       VALUES ($1,$2,$3,$4) RETURNING *`,
+      [req.staff.vendor_id, String(b.name_ar).trim(), b.name_en ? String(b.name_en).trim() : '', num(b.sort_order) || 0]
+    );
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.put('/menu-sections/:id', vendorRole, async (req, res, next) => {
+  try {
+    const cur = (await db.query(`SELECT * FROM menu_sections WHERE id = $1 AND vendor_id = $2`, [req.params.id, req.staff.vendor_id])).rows[0];
+    if (!cur) return fail(res, 404, 'MENU_SECTION_NOT_FOUND', 'القسم غير موجود');
+    const b = req.body || {};
+    const nameAr = b.name_ar !== undefined && String(b.name_ar).trim() ? String(b.name_ar).trim() : cur.name_ar;
+    const nameEn = b.name_en !== undefined ? String(b.name_en).trim() : cur.name_en;
+    const sortOrder = b.sort_order !== undefined ? (num(b.sort_order) ?? cur.sort_order) : cur.sort_order;
+    const { rows } = await db.query(
+      `UPDATE menu_sections SET name_ar = $1, name_en = $2, sort_order = $3 WHERE id = $4 RETURNING *`,
+      [nameAr, nameEn, sortOrder, req.params.id]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.delete('/menu-sections/:id', vendorRole, async (req, res, next) => {
+  try {
+    // المنتجات المرتبطة بالقسم بترجع menu_section_id = null تلقائيًا (ON DELETE SET NULL)
+    const r = await db.query(`DELETE FROM menu_sections WHERE id = $1 AND vendor_id = $2`, [req.params.id, req.staff.vendor_id]);
+    if (!r.rowCount) return fail(res, 404, 'MENU_SECTION_NOT_FOUND', 'القسم غير موجود');
+    res.json({ success: true });
+  } catch (e) {
+    next(e);
+  }
 });
 
 /* -------- offers (§8.4) — كلها Change Request -------- */
