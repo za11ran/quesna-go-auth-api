@@ -81,9 +81,14 @@ function discountFor(product, offers) {
     if (off.discount_type === 'amount' && off.scope !== 'product') continue;
     if (off.starts_at && new Date(off.starts_at).getTime() > now) continue;
     if (off.ends_at && new Date(off.ends_at).getTime() < now) continue;
+    // scope='category': للسوبر ماركت وغيره target_id بيتطابق مع category، وللمطاعم
+    // (مفيش category عندهم) بيتطابق مع menu_section_id بدالها.
     const matches =
       off.scope === 'store' ||
-      (off.scope === 'category' && off.target_id === product.category) ||
+      (off.scope === 'category' && (
+        off.target_id === product.category ||
+        (product.menu_section_id != null && off.target_id === String(product.menu_section_id))
+      )) ||
       (off.scope === 'product' && off.target_id === product.id);
     if (!matches) continue;
     const price = num(product.price);

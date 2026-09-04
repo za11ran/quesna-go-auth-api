@@ -74,9 +74,13 @@ router.post('/orders', authRequired, async (req, res, next) => {
         if (off.discount_type === 'amount' && off.scope !== 'product') continue;
         if (off.starts_at && new Date(off.starts_at).getTime() > now) continue;
         if (off.ends_at && new Date(off.ends_at).getTime() < now) continue;
+        // scope='category': للمطاعم (مفيش category عندهم) بيتطابق مع menu_section_id بدالها.
         const match =
           off.scope === 'store' ||
-          (off.scope === 'category' && off.target_id === p.category) ||
+          (off.scope === 'category' && (
+            off.target_id === p.category ||
+            (p.menu_section_id != null && off.target_id === String(p.menu_section_id))
+          )) ||
           (off.scope === 'product' && off.target_id === p.id);
         if (!match) continue;
         const base = Number(p.price);

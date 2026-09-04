@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { clearSession } from './api';
+import { api, clearSession } from './api';
+import { useAsync } from './ui';
 
 const NAV = {
   admin: [
@@ -22,6 +23,7 @@ const NAV = {
   vendor_owner: [
     ['/vendor', 'الطلبات', true],
     ['/vendor/products', 'المنتجات'],
+    ['/vendor/menu-sections', 'الأقسام'],
     ['/vendor/offers', 'العروض'],
     ['/vendor/profile', 'بيانات المتجر'],
     ['/vendor/change-requests', 'طلبات التغيير'],
@@ -29,13 +31,20 @@ const NAV = {
   vendor_staff: [
     ['/vendor', 'الطلبات', true],
     ['/vendor/products', 'المنتجات'],
+    ['/vendor/menu-sections', 'الأقسام'],
   ],
   driver: [['/driver', 'طلباتي', true]],
 };
 
 export default function Layout({ role, children }) {
   const nav = useNavigate();
-  const items = NAV[role] || [];
+  const isVendor = role === 'vendor_owner' || role === 'vendor_staff';
+  const { data: vendorData } = useAsync(
+    () => (isVendor ? api.get('/api/vendor/profile') : Promise.resolve(null)),
+    [role]
+  );
+  const isRestaurant = vendorData?.type === 'restaurant';
+  const items = (NAV[role] || []).filter(([to]) => to !== '/vendor/menu-sections' || isRestaurant);
   return (
     <div className="shell">
       <aside className="side">

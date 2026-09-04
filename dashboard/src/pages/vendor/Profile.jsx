@@ -11,8 +11,7 @@ export default function VendorProfile() {
   const v = data;
   if (!loading && v && f === null) {
     setF({
-      name_ar: v.name_ar, name_en: v.name_en, phone: v.phone || '',
-      description_ar: v.description_ar || '',
+      phone: v.phone || '', description_ar: v.description_ar || '',
       avg_prep_time_minutes: v.avg_prep_time_minutes, address_ar: v.address_ar || '',
     });
   }
@@ -36,7 +35,7 @@ export default function VendorProfile() {
   return (
     <>
       <h1 className="page-title">بيانات المتجر</h1>
-      <p className="page-sub">التعديلات الحسّاسة (الاسم/الوصف) تمر بمراجعة الإدارة. صورة المتجر بيحطّها الأدمن بس.</p>
+      <p className="page-sub">الوصف يمر بمراجعة الإدارة. اسم المتجر وصورته بيغيّرهم الأدمن بس.</p>
       <ErrBox error={error} />
       {msg && <div className={msg.includes('✅') ? 'card card-pad' : 'err'}>{msg}</div>}
 
@@ -53,10 +52,6 @@ export default function VendorProfile() {
       </div>
 
       <div className="card card-pad">
-        <div className="grid k2">
-          <Field label="الاسم (عربي)"><input value={f.name_ar} onChange={set('name_ar')} /></Field>
-          <Field label="الاسم (إنجليزي)"><input value={f.name_en} onChange={set('name_en')} /></Field>
-        </div>
         <Field label="الوصف"><textarea rows={2} value={f.description_ar} onChange={set('description_ar')} /></Field>
         <div className="grid k2">
           <Field label="تليفون"><input value={f.phone} onChange={set('phone')} /></Field>

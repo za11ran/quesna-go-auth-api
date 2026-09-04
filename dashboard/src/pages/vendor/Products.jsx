@@ -1,9 +1,7 @@
 import { useCallback, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api, apiBase } from '../../api';
 import { useAsync, ErrBox, Empty, Pill, Modal, Field, Money } from '../../ui';
-
-const CATS = ['grocery', 'dairyAndCheese', 'cleaning', 'beverages', 'snacks', 'frozen', 'other'];
+import { SUPERMARKET_CATEGORIES as CATS } from '../../constants';
 
 export default function VendorProducts() {
   const { data, loading, error, reload } = useAsync(() => api.get('/api/vendor/products?per_page=100'));
@@ -33,11 +31,6 @@ export default function VendorProducts() {
         </div>
         <button className="btn primary" onClick={() => setCreating(true)}>+ منتج</button>
       </div>
-      {isRestaurant && (
-        <div className="card" style={{ marginBottom: 12 }}>
-          <Link to="/vendor/menu-sections" className="btn sm">إدارة أقسام القائمة (بيتزا، برجر...)</Link>
-        </div>
-      )}
       <ErrBox error={error} />
       {msg && <div className="err">{msg}</div>}
       <div className="card" style={{ overflow: 'auto' }}>
@@ -123,12 +116,13 @@ function EditProduct({ p, isRestaurant, onClose, onDone }) {
   const [opts, setOpts] = useState(p.options || []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const hasOptions = opts.length > 0;
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   async function submit() {
     setBusy(true); setError(null);
     try {
-      const body = { ...f, price: Number(f.price) };
+      const body = { ...f, price: hasOptions ? Math.min(...opts.map((o) => Number(o.price) || 0)) : Number(f.price) };
       if (isRestaurant) delete body.category; // مفيش أقسام سوبر ماركت للمطاعم — بيستخدموا قسم القائمة من الجدول
       if (opts.length || (p.options || []).length) body.options = opts.map((o) => ({ ...o, price: Number(o.price) }));
       await api.put(`/api/vendor/products/${p.id}`, body);
@@ -144,16 +138,26 @@ function EditProduct({ p, isRestaurant, onClose, onDone }) {
         <Field label="الاسم (عربي)"><input value={f.name_ar} onChange={set('name_ar')} /></Field>
         <Field label="الاسم (إنجليزي)"><input value={f.name_en} onChange={set('name_en')} /></Field>
       </div>
-      {isRestaurant ? (
-        <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>
-      ) : (
-        <div className="grid k2">
+      {!hasOptions && (
+        isRestaurant ? (
           <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>
-          <Field label="القسم"><select value={f.category} onChange={set('category')}>{CATS.map((c) => <option key={c}>{c}</option>)}</select></Field>
-        </div>
+        ) : (
+          <div className="grid k2">
+            <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>
+            <Field label="القسم"><select value={f.category} onChange={set('category')}>{CATS.map((c) => <option key={c}>{c}</option>)}</select></Field>
+          </div>
+        )
+      )}
+      {hasOptions && !isRestaurant && (
+        <Field label="القسم"><select value={f.category} onChange={set('category')}>{CATS.map((c) => <option key={c}>{c}</option>)}</select></Field>
       )}
       <Field label="الوصف"><textarea rows={2} value={f.description_ar} onChange={set('description_ar')} /></Field>
       <OptionsEditor opts={opts} setOpts={setOpts} />
+      {hasOptions && (
+        <p className="page-sub" style={{ marginTop: -6 }}>
+          المنتج له أكتر من حجم/نوع، فسعره بياخده من أقل سعر بينهم — مفيش سعر منفصل للمنتج نفسه.
+        </p>
+      )}
     </Modal>
   );
 }
@@ -163,12 +167,16 @@ function CreateProduct({ isRestaurant, sections, onClose, onDone }) {
   const [opts, setOpts] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const hasOptions = opts.length > 0;
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const canSubmit = f.name_ar && (hasOptions || f.price);
   async function submit() {
     setBusy(true); setError(null);
     try {
       const body = {
-        ...f, price: Number(f.price), stock: f.stock === '' ? null : Number(f.stock),
+        ...f,
+        price: hasOptions ? Math.min(...opts.map((o) => Number(o.price) || 0)) : Number(f.price),
+        stock: f.stock === '' ? null : Number(f.stock),
         menu_section_id: f.menu_section_id || null,
       };
       if (isRestaurant) delete body.category; // مفيش أقسام سوبر ماركت للمطاعم
@@ -180,14 +188,14 @@ function CreateProduct({ isRestaurant, sections, onClose, onDone }) {
   }
   return (
     <Modal title="منتج جديد" onClose={onClose}
-      footer={<button className="btn primary" disabled={busy || !f.name_ar || !f.price} onClick={submit}>إرسال للمراجعة</button>}>
+      footer={<button className="btn primary" disabled={busy || !canSubmit} onClick={submit}>إرسال للمراجعة</button>}>
       <ErrBox error={error} />
       <div className="grid k2">
         <Field label="الاسم (عربي)"><input value={f.name_ar} onChange={set('name_ar')} /></Field>
         <Field label="الاسم (إنجليزي)"><input value={f.name_en} onChange={set('name_en')} /></Field>
       </div>
-      <div className="grid k3">
-        <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>
+      <div className={hasOptions ? 'grid k2' : 'grid k3'}>
+        {!hasOptions && <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>}
         <Field label="الكمية (فاضي = غير محدود)"><input type="number" value={f.stock} onChange={set('stock')} /></Field>
         {isRestaurant ? (
           <Field label="قسم القائمة">
@@ -202,6 +210,11 @@ function CreateProduct({ isRestaurant, sections, onClose, onDone }) {
       </div>
       <Field label="الوصف"><textarea rows={2} value={f.description_ar} onChange={set('description_ar')} /></Field>
       <OptionsEditor opts={opts} setOpts={setOpts} />
+      {hasOptions && (
+        <p className="page-sub" style={{ marginTop: -6 }}>
+          المنتج له أكتر من حجم/نوع، فسعره بياخده من أقل سعر بينهم — مفيش سعر منفصل للمنتج نفسه.
+        </p>
+      )}
     </Modal>
   );
 }

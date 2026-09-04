@@ -90,9 +90,10 @@ router.put('/profile', vendorRole, async (req, res, next) => {
     if (!cur) return fail(res, 404, 'VENDOR_NOT_FOUND', 'المتجر غير موجود');
 
     // ملحوظة: مفيش delivery_fee/min_order هنا خالص — رسوم التوصيل بقت بتتحسب من سعر
-    // القرية (deliveryPricing.js)، ومفيش حد أدنى للطلب تاني. الأدمن بس اللي يقدر يغيّر
-    // اسم/وصف المتجر مباشرة (PUT /admin/vendors/:id) بدون Change Request.
-    const allowed = ['name_ar', 'name_en', 'description_ar', 'description_en', 'phone',
+    // القرية (deliveryPricing.js)، ومفيش حد أدنى للطلب تاني. اسم المتجر (name_ar/name_en)
+    // برضو مش موجود هنا — الأدمن بس اللي يقدر يغيّره (PUT /admin/vendors/:id)، حتى لو
+    // full_permissions مفعّلة للمتجر ده.
+    const allowed = ['description_ar', 'description_en', 'phone',
       'avg_prep_time_minutes', 'address_ar', 'address_en', 'lat', 'lng'];
     const b = req.body || {};
     const changes = {};

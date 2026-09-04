@@ -505,7 +505,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 INSERT INTO app_settings (key, value) VALUES
- ('approval_rules', '{"vendor_fields":["name_ar","name_en","description_ar","description_en"],"product_create":true,"product_update_fields":["name_ar","name_en","category","description_ar","description_en"],"product_delete":true,"product_options":true,"offers":true,"instant":["stock","is_available","is_open","price","working_hours"]}'),
+ ('approval_rules', '{"vendor_fields":["description_ar","description_en"],"product_create":true,"product_update_fields":["name_ar","name_en","category","description_ar","description_en"],"product_delete":true,"product_options":true,"offers":true,"instant":["stock","is_available","is_open","price","working_hours"]}'),
  ('delivery_pricing', '{"extra_vendor_fee": 15}')
 ON CONFLICT (key) DO NOTHING;
 
