@@ -326,6 +326,22 @@ router.post('/products', vendorRole, async (req, res, next) => {
     const b = req.body || {};
     if (!b.name_ar && !b.name) return fail(res, 422, 'NAME_REQUIRED', 'اسم المنتج مطلوب');
     if (num(b.price) === null) return fail(res, 422, 'PRICE_REQUIRED', 'سعر المنتج مطلوب');
+
+    let menuSectionId = null;
+    if (b.menu_section_id !== undefined && b.menu_section_id !== null && b.menu_section_id !== '') {
+      const sid = parseInt(b.menu_section_id, 10);
+      const ok = await db.query(`SELECT 1 FROM menu_sections WHERE id = $1 AND vendor_id = $2`, [sid, req.staff.vendor_id]);
+      if (!ok.rowCount) return fail(res, 422, 'MENU_SECTION_NOT_FOUND', 'القسم غير موجود');
+      menuSectionId = sid;
+    }
+    const options = Array.isArray(b.options) && b.options.length
+      ? b.options.map((o) => ({
+          id: String(o.id), name_ar: String(o.name_ar || o.name || ''), name_en: String(o.name_en || o.name || ''),
+          price: Number(o.price), stock: o.stock === null || o.stock === undefined ? null : parseInt(o.stock, 10),
+          is_available: o.is_available !== false,
+        }))
+      : null;
+
     const pid = `${req.staff.vendor_id}_${Date.now().toString(36)}`;
     const newValues = {
       id: pid, vendor_id: req.staff.vendor_id,
@@ -333,17 +349,29 @@ router.post('/products', vendorRole, async (req, res, next) => {
       brand: b.brand ? String(b.brand) : '', description_ar: b.description_ar ? String(b.description_ar) : '',
       description_en: b.description_en ? String(b.description_en) : '',
       price: num(b.price), category: b.category ? String(b.category) : null,
+      menu_section_id: menuSectionId,
       stock: b.stock === undefined || b.stock === null ? null : parseInt(b.stock, 10),
-      is_available: b.is_available !== false, has_options: Array.isArray(b.options) && b.options.length > 0,
+      is_available: b.is_available !== false, has_options: !!options,
       sort_order: num(b.sort_order) || 0,
     };
+    if (options) newValues.options = options; // مش عمود حقيقي — بيتفصل قبل الـ INSERT في products
 
     if (await hasFullPermissions(req.staff.vendor_id)) {
-      const cols = Object.keys(newValues);
+      const cols = Object.keys(newValues).filter((c) => c !== 'options');
       await db.query(
         `INSERT INTO products (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')})`,
         cols.map((c) => newValues[c])
       );
+      if (options) {
+        for (let i = 0; i < options.length; i++) {
+          const o = options[i];
+          await db.query(
+            `INSERT INTO product_options (product_id, id, name_ar, name_en, price, stock, is_available, sort_order)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [pid, o.id, o.name_ar, o.name_en, o.price, o.stock ?? null, o.is_available !== false, i + 1]
+          );
+        }
+      }
       return res.status(201).json((await db.query(`SELECT * FROM products WHERE id = $1`, [pid])).rows[0]);
     }
 

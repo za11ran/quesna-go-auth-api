@@ -88,8 +88,12 @@ export default function VendorProducts() {
           </tbody>
         </table>
       </div>
-      {edit && <EditProduct p={edit} onClose={() => setEdit(null)} onDone={() => { setEdit(null); reload(); }} />}
-      {creating && <CreateProduct onClose={() => setCreating(false)} onDone={() => { setCreating(false); reload(); }} />}
+      {edit && (
+        <EditProduct p={edit} isRestaurant={isRestaurant} onClose={() => setEdit(null)} onDone={() => { setEdit(null); reload(); }} />
+      )}
+      {creating && (
+        <CreateProduct isRestaurant={isRestaurant} sections={sections} onClose={() => setCreating(false)} onDone={() => { setCreating(false); reload(); }} />
+      )}
     </>
   );
 }
@@ -114,7 +118,7 @@ function ImgBtn({ id, onDone }) {
   );
 }
 
-function EditProduct({ p, onClose, onDone }) {
+function EditProduct({ p, isRestaurant, onClose, onDone }) {
   const [f, setF] = useState({ name_ar: p.name_ar, name_en: p.name_en, price: p.price, category: p.category || 'other', description_ar: p.description_ar || '' });
   const [opts, setOpts] = useState(p.options || []);
   const [busy, setBusy] = useState(false);
@@ -125,6 +129,7 @@ function EditProduct({ p, onClose, onDone }) {
     setBusy(true); setError(null);
     try {
       const body = { ...f, price: Number(f.price) };
+      if (isRestaurant) delete body.category; // مفيش أقسام سوبر ماركت للمطاعم — بيستخدموا قسم القائمة من الجدول
       if (opts.length || (p.options || []).length) body.options = opts.map((o) => ({ ...o, price: Number(o.price) }));
       await api.put(`/api/vendor/products/${p.id}`, body);
       onDone();
@@ -139,27 +144,37 @@ function EditProduct({ p, onClose, onDone }) {
         <Field label="الاسم (عربي)"><input value={f.name_ar} onChange={set('name_ar')} /></Field>
         <Field label="الاسم (إنجليزي)"><input value={f.name_en} onChange={set('name_en')} /></Field>
       </div>
-      <div className="grid k2">
+      {isRestaurant ? (
         <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>
-        <Field label="القسم"><select value={f.category} onChange={set('category')}>{CATS.map((c) => <option key={c}>{c}</option>)}</select></Field>
-      </div>
+      ) : (
+        <div className="grid k2">
+          <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>
+          <Field label="القسم"><select value={f.category} onChange={set('category')}>{CATS.map((c) => <option key={c}>{c}</option>)}</select></Field>
+        </div>
+      )}
       <Field label="الوصف"><textarea rows={2} value={f.description_ar} onChange={set('description_ar')} /></Field>
       <OptionsEditor opts={opts} setOpts={setOpts} />
     </Modal>
   );
 }
 
-function CreateProduct({ onClose, onDone }) {
-  const [f, setF] = useState({ name_ar: '', name_en: '', price: '', category: 'other', stock: '', description_ar: '' });
+function CreateProduct({ isRestaurant, sections, onClose, onDone }) {
+  const [f, setF] = useState({ name_ar: '', name_en: '', price: '', category: 'other', menu_section_id: '', stock: '', description_ar: '' });
+  const [opts, setOpts] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   async function submit() {
     setBusy(true); setError(null);
     try {
-      await api.post('/api/vendor/products', {
+      const body = {
         ...f, price: Number(f.price), stock: f.stock === '' ? null : Number(f.stock),
-      });
+        menu_section_id: f.menu_section_id || null,
+      };
+      if (isRestaurant) delete body.category; // مفيش أقسام سوبر ماركت للمطاعم
+      else delete body.menu_section_id;
+      if (opts.length) body.options = opts.map((o) => ({ ...o, price: Number(o.price) }));
+      await api.post('/api/vendor/products', body);
       onDone();
     } catch (e) { setError(e); } finally { setBusy(false); }
   }
@@ -174,9 +189,19 @@ function CreateProduct({ onClose, onDone }) {
       <div className="grid k3">
         <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>
         <Field label="الكمية (فاضي = غير محدود)"><input type="number" value={f.stock} onChange={set('stock')} /></Field>
-        <Field label="القسم"><select value={f.category} onChange={set('category')}>{CATS.map((c) => <option key={c}>{c}</option>)}</select></Field>
+        {isRestaurant ? (
+          <Field label="قسم القائمة">
+            <select value={f.menu_section_id} onChange={set('menu_section_id')}>
+              <option value="">بدون قسم</option>
+              {sections.map((s) => <option key={s.id} value={s.id}>{s.name_ar}</option>)}
+            </select>
+          </Field>
+        ) : (
+          <Field label="القسم"><select value={f.category} onChange={set('category')}>{CATS.map((c) => <option key={c}>{c}</option>)}</select></Field>
+        )}
       </div>
       <Field label="الوصف"><textarea rows={2} value={f.description_ar} onChange={set('description_ar')} /></Field>
+      <OptionsEditor opts={opts} setOpts={setOpts} />
     </Modal>
   );
 }

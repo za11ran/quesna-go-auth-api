@@ -95,13 +95,23 @@ async function applyChangeRequest(cr) {
     await db.query(`UPDATE vendors SET has_pending_change = false WHERE id = $1`, [cr.vendor_id]);
   } else if (cr.entity_type === 'product') {
     if (cr.action === 'create') {
-      const cols = Object.keys(nv);
+      const cols = Object.keys(nv).filter((c) => c !== 'options');
       const ph = cols.map((_, i) => `$${i + 1}`).join(', ');
       await db.query(
         `INSERT INTO products (${cols.join(', ')}) VALUES (${ph})
          ON CONFLICT (id) DO UPDATE SET ${cols.map((c) => `${c} = EXCLUDED.${c}`).join(', ')}`,
         cols.map((c) => nv[c])
       );
+      if (Array.isArray(nv.options) && nv.options.length) {
+        for (let i = 0; i < nv.options.length; i++) {
+          const o = nv.options[i];
+          await db.query(
+            `INSERT INTO product_options (product_id, id, name_ar, name_en, price, stock, is_available, sort_order)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [cr.entity_id, o.id, o.name_ar, o.name_en, o.price, o.stock ?? null, o.is_available !== false, i + 1]
+          );
+        }
+      }
     } else if (cr.action === 'delete') {
       await db.query(`UPDATE products SET deleted_at = now(), has_pending_change = false WHERE id = $1`, [cr.entity_id]);
     } else {
