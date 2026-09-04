@@ -26,6 +26,16 @@ async function ownsOrder(orderId, driverId) {
   const r = await db.query(`SELECT 1 FROM orders WHERE id = $1 AND driver_id = $2`, [orderId, driverId]);
   return r.rowCount > 0;
 }
+// آخر رد للدليفري على عرض التوصيل بتاع الطلب ده — null لسه معلّق، 'accepted'/'rejected'.
+// orders.status فاضل 'assigned' لحد ما الدليفري يوصّل الأول order-level status (picked_up)،
+// فمينفعش نعرف "قبل ولا لسه" من status لوحده — لازم نرجع للـ delivery_offers.
+async function driverOfferResponse(orderId, driverId) {
+  const { rows } = await db.query(
+    `SELECT response FROM delivery_offers WHERE order_id = $1 AND driver_id = $2 ORDER BY id DESC LIMIT 1`,
+    [orderId, driverId]
+  );
+  return rows[0]?.response || null;
+}
 
 /* -------- login -------- */
 router.post('/auth/login', async (req, res, next) => {
@@ -95,7 +105,11 @@ router.get('/orders', driverRole, async (req, res, next) => {
       `SELECT id FROM orders WHERE driver_id = $1 ORDER BY placed_at DESC LIMIT 100`, [d.id]
     );
     const data = [];
-    for (const r of rows) data.push(serializeOrder(await loadOrder(r.id)));
+    for (const r of rows) {
+      const out = serializeOrder(await loadOrder(r.id));
+      out.driver_offer_response = await driverOfferResponse(r.id, d.id);
+      data.push(out);
+    }
     res.json({ data });
   } catch (e) { next(e); }
 });
@@ -113,6 +127,7 @@ router.get('/orders/:id', driverRole, async (req, res, next) => {
       [req.params.id]
     );
     out.pickup = vend.rows.map((v) => ({ name: v.name_ar, phone: v.phone, address: v.address_ar, lat: v.lat, lng: v.lng }));
+    out.driver_offer_response = await driverOfferResponse(req.params.id, d.id);
     res.json(out);
   } catch (e) { next(e); }
 });

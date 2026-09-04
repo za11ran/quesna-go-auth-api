@@ -67,6 +67,9 @@ export default function Driver() {
                 const sub = o.driver_sub_status || 'heading_to_vendor';
                 const next = SUB_NEXT[sub];
                 const pickup = o.pickup || [];
+                // status الطلب فاضل 'assigned' لحد ما الدليفري يوصّل (يبقى picked_up) —
+                // اللي بيتغيّر لحظة القبول هو delivery_offers.response بس، مش الحالة دي.
+                const pendingAcceptance = o.status === 'assigned' && o.driver_offer_response !== 'accepted';
                 return (
                   <div key={o.id} className="card card-pad">
                     <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -79,13 +82,13 @@ export default function Driver() {
                       {o.address_text} · <Money v={o.total} /> ({o.payment_method})
                     </p>
                     <div className="row">
-                      {o.status === 'assigned' && (
+                      {pendingAcceptance && (
                         <>
                           <button className="btn sm ok" disabled={busy} onClick={() => act(o.id, 'accept')}>قبول التعيين</button>
                           <button className="btn sm danger" disabled={busy} onClick={() => act(o.id, 'reject')}>رفض</button>
                         </>
                       )}
-                      {o.status !== 'assigned' && next && (
+                      {!pendingAcceptance && next && (
                         <button className="btn sm primary" disabled={busy} onClick={() => act(o.id, 'status', { status: next[0] })}>{next[1]}</button>
                       )}
                     </div>
