@@ -278,7 +278,15 @@ router.post('/quick-orders/:id/cancel', dispatchRole, async (req, res, next) => 
     if (b.qo.driver_id) {
       await db.query(`UPDATE drivers SET status = 'available', current_order_id = NULL, updated_at = now() WHERE id = $1`, [b.qo.driver_id]);
     }
-    const updated = await setQuickOrderStatus(req.params.id, 'cancelled', { driverId: null, driverSubStatus: null });
+    const reason = (req.body || {}).reason ? String(req.body.reason).trim().slice(0, 300) : null;
+    const updated = await setQuickOrderStatus(req.params.id, 'cancelled', {
+      driverId: null, driverSubStatus: null, cancelReason: reason,
+    });
+    await notify(updated.qo.customer_id, {
+      title: 'تم رفض طلبك',
+      body: reason ? `طلب ${req.params.id}: ${reason}` : `طلب ${req.params.id} اتلغى`,
+      type: 'quick_order_cancelled', orderId: req.params.id,
+    });
     res.json(serializeQuickOrder(updated));
   } catch (e) { next(e); }
 });

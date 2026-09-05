@@ -52,6 +52,7 @@ function serializeQuickOrder({ qo, customer, driver }) {
     address: qo.address_lat != null && qo.address_lng != null
       ? { text: qo.address_text, lat: Number(qo.address_lat), lng: Number(qo.address_lng) }
       : null,
+    cancel_reason: qo.cancel_reason || null,
     items: [{
       product_id: null, name: qo.details, option_name: null,
       unit_price: price, quantity: 1, line_total: price, note: null,
@@ -63,13 +64,14 @@ function serializeQuickOrder({ qo, customer, driver }) {
   };
 }
 
-async function setQuickOrderStatus(id, status, { dispatcherId, driverId, price, driverSubStatus } = {}) {
+async function setQuickOrderStatus(id, status, { dispatcherId, driverId, price, driverSubStatus, cancelReason } = {}) {
   const cols = ['status = $2', 'updated_at = now()'];
   const params = [id, status];
   if (dispatcherId !== undefined) { params.push(dispatcherId); cols.push(`dispatcher_id = $${params.length}`); }
   if (driverId !== undefined) { params.push(driverId); cols.push(`driver_id = $${params.length}`); }
   if (price !== undefined && price !== null) { params.push(price); cols.push(`price = $${params.length}`); }
   if (driverSubStatus !== undefined) { params.push(driverSubStatus); cols.push(`driver_sub_status = $${params.length}`); }
+  if (cancelReason !== undefined) { params.push(cancelReason); cols.push(`cancel_reason = $${params.length}`); }
   await db.query(`UPDATE quick_orders SET ${cols.join(', ')} WHERE id = $1`, params);
   const bundle = await loadQuickOrder(id);
   emitTo(`customer:${bundle.qo.customer_id}`, 'order:update', { order_id: id, status });

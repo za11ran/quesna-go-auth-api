@@ -689,5 +689,7 @@ ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS updated_at        TIMESTAMPTZ 
 ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS address_text      TEXT;
 ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS address_lat       NUMERIC(9,6);
 ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS address_lng       NUMERIC(9,6);
+-- سبب رفض المشرف للطلب (اختياري) — يظهر للعميل بدل ما الطلب يتلغي من غير تفسير.
+ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS cancel_reason      TEXT;
 
 ALTER TABLE categories ADD COLUMN IF NOT EXISTS image TEXT;

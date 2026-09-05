@@ -32,6 +32,12 @@ export default function DispatchQueue() {
     act(o.id, 'accept', { price }, true);
   }
 
+  function rejectQuick(o) {
+    const reason = prompt('سبب الرفض (اختياري) — هيوصل للعميل:', '');
+    if (reason === null) return;
+    act(o.id, 'cancel', { reason }, true);
+  }
+
   return (
     <>
       <h1 className="page-title">طابور التوزيع</h1>
@@ -67,9 +73,14 @@ export default function DispatchQueue() {
               )}
 
               {o.is_quick && o.status === 'pending' && (
-                <button className="btn sm primary" disabled={busy === o.id + 'accept'} onClick={() => acceptQuick(o)}>
-                  مراجعة وتسعير
-                </button>
+                <div className="row">
+                  <button className="btn sm primary" disabled={busy === o.id + 'accept'} onClick={() => acceptQuick(o)}>
+                    مراجعة وتسعير
+                  </button>
+                  <button className="btn sm danger" disabled={busy === o.id + 'cancel'} onClick={() => rejectQuick(o)}>
+                    رفض
+                  </button>
+                </div>
               )}
               {o.is_quick && o.status === 'price_review' && (
                 <p className="page-sub" style={{ margin: 0 }}>
