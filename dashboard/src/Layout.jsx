@@ -4,6 +4,7 @@ import { clearSession } from './api';
 const NAV = {
   admin: [
     ['/admin', 'نظرة عامة', true],
+    ['/admin/analytics', 'الإحصائيات'],
     ['/admin/change-requests', 'طلبات التغيير'],
     ['/admin/vendors', 'التجّار'],
     ['/admin/categories', 'الأقسام'],

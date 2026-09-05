@@ -5,6 +5,7 @@
 //   GET  /admin/settings/approval-rules    POST /admin/settings/approval-rules
 //   GET  /admin/vendors  POST /admin/vendors/:id/approve  POST /admin/vendors/:id/suspend
 //   POST /admin/products/most-requested   (تحديد الأكثر طلبًا)
+//   GET  /admin/reports    GET /admin/analytics   (إحصائيات مشرفين/تجّار/دليفري)
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const db = require('./db');
@@ -703,6 +704,49 @@ router.get('/reports', adminOnly, async (req, res, next) => {
       orders_total: orders.c, orders_today: today.c, revenue_delivered: revenue.c,
       drivers_online: drivers.c, pending_change_requests: cr.c,
       vendors: vendors.c, customers: customers.c,
+    });
+  } catch (e) { next(e); }
+});
+
+/* -------- إحصائيات تفصيلية: مشرفين / تجّار / دليفري -------- */
+router.get('/analytics', adminOnly, async (req, res, next) => {
+  try {
+    const [dispatchers, vendors, driversRes] = await Promise.all([
+      db.query(
+        `SELECT su.id, su.name, su.phone,
+                count(o.id)::int AS orders_assigned,
+                count(o.id) FILTER (WHERE o.status = 'delivered')::int AS orders_delivered
+           FROM staff_users su
+           LEFT JOIN orders o ON o.dispatcher_id = su.id
+          WHERE su.role = 'dispatcher'
+          GROUP BY su.id
+          ORDER BY orders_assigned DESC, su.name ASC`
+      ),
+      db.query(
+        `SELECT v.id, v.name_ar, v.name_en, v.type,
+                count(DISTINCT ov.order_id)::int AS orders_count,
+                count(DISTINCT ov.order_id) FILTER (WHERE o.status = 'delivered')::int AS orders_delivered,
+                COALESCE(sum(ov.subtotal) FILTER (WHERE o.status = 'delivered'), 0)::float AS revenue_delivered
+           FROM vendors v
+           LEFT JOIN order_vendors ov ON ov.vendor_id = v.id
+           LEFT JOIN orders o ON o.id = ov.order_id
+          WHERE v.deleted_at IS NULL
+          GROUP BY v.id
+          ORDER BY orders_count DESC, v.name_ar ASC`
+      ),
+      // deliveries_count بتتحسب من فعل التسليم الحقيقي (driver.js عند status=delivered)
+      // فهي أدق مقياس لـ"أكتر حد شغال" من عدّ orders.driver_id (بتتغيّر لو الطلب اتنقل لدليفري تاني).
+      db.query(
+        `SELECT id, name, phone, vehicle_type, status, is_online, zone,
+                deliveries_count, rating
+           FROM drivers
+          ORDER BY deliveries_count DESC, name ASC`
+      ),
+    ]);
+    res.json({
+      dispatchers: dispatchers.rows,
+      vendors: vendors.rows,
+      drivers: driversRes.rows,
     });
   } catch (e) { next(e); }
 });

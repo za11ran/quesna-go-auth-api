@@ -5,6 +5,7 @@ import Login from './Login';
 import Layout from './Layout';
 
 import Overview from './pages/admin/Overview';
+import Analytics from './pages/admin/Analytics';
 import ChangeRequests from './pages/admin/ChangeRequests';
 import Vendors from './pages/admin/Vendors';
 import Categories from './pages/admin/Categories';
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/" element={<Navigate to={HOME[role] || '/admin'} replace />} />
 
         <Route path="/admin" element={<Overview />} />
+        <Route path="/admin/analytics" element={<Analytics />} />
         <Route path="/admin/change-requests" element={<ChangeRequests />} />
         <Route path="/admin/vendors" element={<Vendors />} />
         <Route path="/admin/categories" element={<Categories />} />

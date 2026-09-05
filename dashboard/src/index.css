@@ -39,6 +39,8 @@ input, select, textarea { font: inherit; }
 .main { padding: 24px 28px; overflow: auto; }
 .page-title { font-size: 20px; font-weight: 800; margin: 0 0 4px; }
 .page-sub { color: var(--muted); margin: 0 0 20px; }
+.section-title { font-size: 15px; font-weight: 700; margin: 24px 0 10px; }
+.section-title:first-of-type { margin-top: 0; }
 
 /* card / table */
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
