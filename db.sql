@@ -585,7 +585,10 @@ INSERT INTO staff_users (id, name, email, phone, password_hash, role, driver_id)
   '$2a$10$J0L78m889Bd2ls7Q49ddfeNBPM1sB91Uvk4yxRUrMj9TuiI/cURNO', 'driver', 'drv_1'),
  ('c0000000-0000-4000-8000-000000000001', 'المشرف سامي', 'dispatch1@quesnago.com', '+201000000040',
   '$2a$10$b0RRbt6QzR8xLUk4O8822.XWe0ACg/QSVPstU7f8oNh5xLmM3JdVO', 'dispatcher', NULL)
-ON CONFLICT (email) DO NOTHING;
+-- لازم الـ arbiter يكون على id (المفتاح الأساسي) مش email — دول صفوف بـ id
+-- ثابت، فلو الـ arbiter email بس، تكرار تشغيل db.sql هيلاقي id متكرر (pkey) وده
+-- constraint مختلف عن email فمش بيتغطى بـ "ON CONFLICT (email)" ويطلع خطأ.
+ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO drivers (id, staff_user_id, name, phone, vehicle_type, status, is_online, zone) VALUES
  ('drv_1', 'd0000000-0000-4000-8000-000000000001', 'محمود الدليفري', '+201000000030', 'motorcycle', 'available', true, 'مدينة نصر'),
