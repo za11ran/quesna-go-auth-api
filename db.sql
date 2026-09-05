@@ -220,6 +220,27 @@ CREATE INDEX IF NOT EXISTS idx_products_vendor   ON products(vendor_id) WHERE de
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
 CREATE INDEX IF NOT EXISTS idx_products_most_req ON products(is_most_requested) WHERE is_most_requested;
 
+-- تقييم كل منتج لوحده (مش بس المتجر) — نفس فكرة vendor_ratings بالظبط.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS rating        NUMERIC(3,2) NOT NULL DEFAULT 0;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS reviews_count INTEGER      NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS product_ratings (
+    product_id  VARCHAR(60) NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    rating      SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (product_id, customer_id)
+);
+
+-- المفضّلة — كانت متخزّنة محلي بس في التطبيق (تختفي بمجرد إعادة فتحه)؛
+-- دلوقتي بتتحفظ هنا زي العناوين والإشعارات بالظبط.
+CREATE TABLE IF NOT EXISTS favorites (
+    customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    product_id  VARCHAR(60) NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (customer_id, product_id)
+);
+
 CREATE TABLE IF NOT EXISTS product_options (
     id            VARCHAR(60) NOT NULL,
     product_id    VARCHAR(60) NOT NULL REFERENCES products(id) ON DELETE CASCADE,

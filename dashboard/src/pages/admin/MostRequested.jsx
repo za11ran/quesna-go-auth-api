@@ -2,6 +2,31 @@ import { useMemo, useState } from 'react';
 import { api, apiBase } from '../../api';
 import { useAsync, ErrBox, Empty } from '../../ui';
 
+function RatingCell({ product, onSaved }) {
+  const [rating, setRating] = useState(product.rating ?? 0);
+  const [count, setCount] = useState(product.reviews_count ?? 0);
+  const [busy, setBusy] = useState(false);
+  const dirty = Number(rating) !== Number(product.rating ?? 0) || Number(count) !== Number(product.reviews_count ?? 0);
+
+  async function save() {
+    setBusy(true);
+    try {
+      await api.patch(`/api/admin/products/${product.id}/rating`, { rating, reviews_count: count });
+      onSaved();
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="row" style={{ gap: 4 }}>
+      <input type="number" min="0" max="5" step="0.1" value={rating}
+        onChange={(e) => setRating(e.target.value)} style={{ width: 50 }} />
+      <input type="number" min="0" step="1" value={count}
+        onChange={(e) => setCount(e.target.value)} style={{ width: 55 }} title="عدد التقييمات" />
+      {dirty && <button className="btn sm primary" disabled={busy} onClick={save}>حفظ</button>}
+    </div>
+  );
+}
+
 // اختيار المنتجات "الأكثر طلبًا" اللي بتظهر للعميل في الصفحة الرئيسية
 export default function MostRequested() {
   const { data, loading, error, reload } = useAsync(() => api.get('/api/admin/products'));
@@ -81,13 +106,13 @@ export default function MostRequested() {
       <div className="card" style={{ overflow: 'auto' }}>
         <table>
           <thead>
-            <tr><th></th><th>المنتج</th><th>المتجر</th><th>السعر</th><th>متاح؟</th></tr>
+            <tr><th></th><th>المنتج</th><th>المتجر</th><th>السعر</th><th>متاح؟</th><th>التقييم</th></tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} className="empty">تحميل…</td></tr>
+              <tr><td colSpan={6} className="empty">تحميل…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={5}><Empty /></td></tr>
+              <tr><td colSpan={6}><Empty /></td></tr>
             ) : (
               filtered.map((p) => (
                 <tr key={p.id} style={{ opacity: p.is_available ? 1 : 0.55 }}>
@@ -108,6 +133,7 @@ export default function MostRequested() {
                   <td>{p.vendor_name_ar}</td>
                   <td>{Number(p.price).toLocaleString('ar-EG')} ج.م</td>
                   <td>{p.is_available ? '✓' : '✕'}</td>
+                  <td><RatingCell product={p} onSaved={reload} /></td>
                 </tr>
               ))
             )}

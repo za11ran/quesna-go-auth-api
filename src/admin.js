@@ -336,7 +336,8 @@ router.get('/products', adminOnly, async (req, res, next) => {
     if (req.query.most_requested === 'true') where.push('p.is_most_requested = true');
     const { rows } = await db.query(
       `SELECT p.id, p.name_ar, p.name_en, p.price, p.image, p.category, p.is_available,
-              p.is_most_requested, p.vendor_id, v.name_ar AS vendor_name_ar, v.name_en AS vendor_name_en
+              p.is_most_requested, p.rating, p.reviews_count,
+              p.vendor_id, v.name_ar AS vendor_name_ar, v.name_en AS vendor_name_en
          FROM products p JOIN vendors v ON v.id = p.vendor_id
         WHERE ${where.join(' AND ')}
         ORDER BY p.is_most_requested DESC, v.name_ar, p.sort_order, p.name_ar
@@ -344,6 +345,38 @@ router.get('/products', adminOnly, async (req, res, next) => {
       params
     );
     res.json({ data: rows });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// الأدمن يقدر يظبط تقييم منتج يدويًا (زي نفس فكرة تقييم المتجر) — بيغلب أي
+// حساب تلقائي من product_ratings لحد ما عميل يقيّم المنتج ده تاني.
+router.patch('/products/:id/rating', adminOnly, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const cols = [];
+    const params = [];
+    if (b.rating !== undefined) {
+      const r = num(b.rating);
+      if (r === null || r < 0 || r > 5) return fail(res, 422, 'INVALID_RATING', 'التقييم لازم يكون بين 0 و5');
+      params.push(r);
+      cols.push(`rating = $${params.length}`);
+    }
+    if (b.reviews_count !== undefined) {
+      const c = parseInt(b.reviews_count, 10);
+      if (Number.isNaN(c) || c < 0) return fail(res, 422, 'INVALID_REVIEWS_COUNT', 'عدد التقييمات لازم يكون صفر أو أكتر');
+      params.push(c);
+      cols.push(`reviews_count = $${params.length}`);
+    }
+    if (!cols.length) return fail(res, 422, 'NOTHING_TO_UPDATE', 'مفيش تعديلات');
+    params.push(req.params.id);
+    const { rows } = await db.query(
+      `UPDATE products SET ${cols.join(', ')}, updated_at = now() WHERE id = $${params.length} RETURNING id, rating, reviews_count`,
+      params
+    );
+    if (!rows.length) return fail(res, 404, 'PRODUCT_NOT_FOUND', 'المنتج غير موجود');
+    res.json(rows[0]);
   } catch (e) {
     next(e);
   }

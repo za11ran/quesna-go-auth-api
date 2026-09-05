@@ -5,9 +5,11 @@
 //   POST /api/vendors/:id/ratings   {rating: 1-5}   (تقييم/تحديث تقييم عميل واحد)
 //   GET /api/vendors/:id/products?category=&search=&page=
 //   GET /api/vendors/:id/products/:productId
+//   POST /api/products/:id/ratings   {rating: 1-5}
 //   GET /api/home/categories
 //   GET /api/products/most-requested
 //   GET /api/offers
+//   GET/POST /api/favorites   DELETE /api/favorites/:productId
 const router = require('express').Router();
 const db = require('./db');
 const { authRequired } = require('./auth');
@@ -131,6 +133,8 @@ function serializeProduct(p, options, offers, lang) {
     is_available: p.is_available,
     has_options: p.has_options,
     sort_order: p.sort_order || 0,
+    rating: num(p.rating) || 0,
+    reviews_count: p.reviews_count || 0,
     discount: discountFor(p, offers),
     has_pending_change: false,
     options: (options || []).map((o) => serializeOption(o, price, lang)),
@@ -250,6 +254,99 @@ router.post('/vendors/:id/ratings', authRequired, async (req, res, next) => {
     );
 
     res.json({ success: true, rating: Number(avgRating), reviews_count: reviewsCount, my_rating: rating });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/* ---------------- POST /api/products/:id/ratings (تقييم عميل واحد لمنتج) ---------------- */
+router.post('/products/:id/ratings', authRequired, async (req, res, next) => {
+  try {
+    const rating = parseInt((req.body || {}).rating, 10);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return fail(res, 422, 'INVALID_RATING', 'التقييم لازم يكون رقم من 1 لـ 5');
+    }
+    const productExists = await db.query(
+      `SELECT 1 FROM products WHERE id = $1 AND deleted_at IS NULL`,
+      [req.params.id]
+    );
+    if (!productExists.rowCount) return fail(res, 404, 'PRODUCT_NOT_FOUND', 'المنتج غير موجود');
+
+    await db.query(
+      `INSERT INTO product_ratings (product_id, customer_id, rating)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (product_id, customer_id)
+       DO UPDATE SET rating = EXCLUDED.rating, updated_at = now()`,
+      [req.params.id, req.user.sub, rating]
+    );
+
+    const agg = await db.query(
+      `SELECT COALESCE(AVG(rating), 0)::numeric(3,2) AS avg_rating, count(*)::int AS c
+         FROM product_ratings WHERE product_id = $1`,
+      [req.params.id]
+    );
+    const { avg_rating: avgRating, c: reviewsCount } = agg.rows[0];
+    await db.query(
+      `UPDATE products SET rating = $2, reviews_count = $3, updated_at = now() WHERE id = $1`,
+      [req.params.id, avgRating, reviewsCount]
+    );
+
+    res.json({ success: true, rating: Number(avgRating), reviews_count: reviewsCount, my_rating: rating });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/* ---------------- المفضّلة (favorites) ---------------- */
+// كانت متخزّنة محلي بس جوه التطبيق (Cubit من غير أي حفظ) — تختفي بمجرد إغلاق
+// التطبيق وإعادة فتحه. دلوقتي بتتحفظ في السيرفر زي العناوين والإشعارات بالظبط.
+router.get('/favorites', authRequired, async (req, res, next) => {
+  try {
+    const lang = langOf(req);
+    const { rows } = await db.query(
+      `SELECT p.* FROM favorites f
+         JOIN products p ON p.id = f.product_id
+        WHERE f.customer_id = $1 AND p.deleted_at IS NULL
+        ORDER BY f.created_at DESC`,
+      [req.user.sub]
+    );
+    const opts = await loadOptions(rows.map((p) => p.id));
+    const offersByVendor = {};
+    for (const p of rows) {
+      if (!offersByVendor[p.vendor_id]) offersByVendor[p.vendor_id] = await loadOffers(p.vendor_id);
+    }
+    res.json({
+      data: rows.map((p) => serializeProduct(p, opts[p.id], offersByVendor[p.vendor_id], lang)),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/favorites', authRequired, async (req, res, next) => {
+  try {
+    const productId = String((req.body || {}).product_id || '');
+    if (!productId) return fail(res, 422, 'PRODUCT_ID_REQUIRED', 'product_id مطلوب');
+    const exists = await db.query(`SELECT 1 FROM products WHERE id = $1 AND deleted_at IS NULL`, [productId]);
+    if (!exists.rowCount) return fail(res, 404, 'PRODUCT_NOT_FOUND', 'المنتج غير موجود');
+    await db.query(
+      `INSERT INTO favorites (customer_id, product_id) VALUES ($1, $2)
+       ON CONFLICT (customer_id, product_id) DO NOTHING`,
+      [req.user.sub, productId]
+    );
+    res.status(201).json({ success: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.delete('/favorites/:productId', authRequired, async (req, res, next) => {
+  try {
+    await db.query(
+      `DELETE FROM favorites WHERE customer_id = $1 AND product_id = $2`,
+      [req.user.sub, req.params.productId]
+    );
+    res.json({ success: true });
   } catch (e) {
     next(e);
   }
