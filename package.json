@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "db:setup": "node scripts/setup-db.js",
-    "reset-demo": "node scripts/reset-demo.js"
+    "reset-demo": "node scripts/reset-demo.js",
+    "set-password": "node scripts/set-password.js"
   },
   "engines": {
     "node": ">=18.11"
