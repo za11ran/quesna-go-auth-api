@@ -13,6 +13,7 @@ const { signStaffToken, staffAuth } = require('./staff-auth');
 const { applyChangeRequest } = require('./changeRequests');
 const { notify } = require('./notify');
 const { imageUpload, saveImage } = require('./upload');
+const { loadOrder, serializeOrder } = require('./orderView');
 
 const slug = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || `v${Date.now().toString(36)}`;
 const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
@@ -675,6 +676,19 @@ router.get('/orders', adminOnly, async (req, res, next) => {
     res.json({ data: rows, meta: { page, per_page: perPage, total, last_page: Math.max(1, Math.ceil(total / perPage)) } });
   } catch (e) { next(e); }
 });
+
+// تفاصيل طلب واحد + سجل الحالة الكامل (status_history) — مين وزّعه/ألغاه/رفضه
+// ومتى بالظبط، بيفيد في تتبّع حالات زي "الطلب اختفى من عند الدليفري" اللي
+// السبب الحقيقي وراها غالبًا مسجّل هنا (dispatcher(unassign)، driver(reject)،
+// system(offer_timeout)...).
+router.get('/orders/:id', adminOnly, async (req, res, next) => {
+  try {
+    const b = await loadOrder(req.params.id);
+    if (!b) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+    res.json(serializeOrder(b));
+  } catch (e) { next(e); }
+});
+
 router.get('/users', adminOnly, async (req, res, next) => {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
