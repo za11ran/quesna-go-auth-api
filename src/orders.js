@@ -338,10 +338,12 @@ router.post('/orders/quick', authRequired, imagesUpload, async (req, res, next) 
     const addressText = b.address_text ? String(b.address_text).trim() : null;
     const addressLat = b.lat != null ? Number(b.lat) : null;
     const addressLng = b.lng != null ? Number(b.lng) : null;
+    const VEHICLE_TYPES = ['motorcycle', 'tuk_tuk', 'car'];
+    const vehicleType = VEHICLE_TYPES.includes(String(b.vehicle_type || '')) ? String(b.vehicle_type) : null;
     await db.query(
-      `INSERT INTO quick_orders (id, customer_id, details, price, images, address_text, address_lat, address_lng)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [id, req.user.sub, String(b.details).trim(), b.price != null ? Number(b.price) : null, JSON.stringify(urls), addressText, addressLat, addressLng]
+      `INSERT INTO quick_orders (id, customer_id, details, price, images, address_text, address_lat, address_lng, vehicle_type)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [id, req.user.sub, String(b.details).trim(), b.price != null ? Number(b.price) : null, JSON.stringify(urls), addressText, addressLat, addressLng, vehicleType]
     );
     await notify(req.user.sub, { title: 'استلمنا طلبك السريع', body: `رقم ${id} — هنتواصل معاك`, type: 'order_placed', orderId: id });
 

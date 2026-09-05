@@ -53,6 +53,7 @@ function serializeQuickOrder({ qo, customer, driver }) {
       ? { text: qo.address_text, lat: Number(qo.address_lat), lng: Number(qo.address_lng) }
       : null,
     cancel_reason: qo.cancel_reason || null,
+    vehicle_type: qo.vehicle_type || null,
     items: [{
       product_id: null, name: qo.details, option_name: null,
       unit_price: price, quantity: 1, line_total: price, note: null,

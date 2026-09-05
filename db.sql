@@ -691,5 +691,8 @@ ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS address_lat       NUMERIC(9,6)
 ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS address_lng       NUMERIC(9,6);
 -- سبب رفض المشرف للطلب (اختياري) — يظهر للعميل بدل ما الطلب يتلغي من غير تفسير.
 ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS cancel_reason      TEXT;
+-- نوع المركبة لحجز الدريفري (motorcycle | tuk_tuk | car) — NULL للطلب
+-- السريع العادي (مش حجز دريفري).
+ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS vehicle_type       VARCHAR(20);
 
 ALTER TABLE categories ADD COLUMN IF NOT EXISTS image TEXT;

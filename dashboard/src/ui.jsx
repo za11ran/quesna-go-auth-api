@@ -52,7 +52,7 @@ const LABELS = {
   // الدفع
   cash: 'كاش', card: 'بطاقة', wallet: 'محفظة', paid: 'مدفوع', failed: 'فشل',
   // المركبة
-  motorcycle: 'موتوسيكل', car: 'عربية', bicycle: 'دراجة',
+  motorcycle: 'موتوسيكل', car: 'عربية', bicycle: 'دراجة', tuk_tuk: 'توك توك',
   // مين عمل التغيير (سجل الحالة)
   customer: 'العميل', system: 'النظام', vendor: 'التاجر', dispatcher: 'المشرف',
   driver: 'الدليفري', admin: 'الأدمن',

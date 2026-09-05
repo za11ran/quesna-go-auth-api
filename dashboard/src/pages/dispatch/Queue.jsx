@@ -71,6 +71,11 @@ export default function DispatchQueue() {
                   {o.images?.length > 0 && ` — مرفق ${o.images.length} صورة`}
                 </p>
               )}
+              {o.is_quick && o.vehicle_type && (
+                <p className="page-sub" style={{ margin: '0 0 6px' }}>
+                  🛺 حجز دريفري — المركبة: <strong>{trLabel(o.vehicle_type)}</strong>
+                </p>
+              )}
 
               {o.is_quick && o.status === 'pending' && (
                 <div className="row">
