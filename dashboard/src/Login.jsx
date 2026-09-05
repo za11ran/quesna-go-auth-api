@@ -29,9 +29,8 @@ export default function Login({ onLogin }) {
   return (
     <div className="login-wrap">
       <form className="card card-pad login-card" onSubmit={submit}>
-        <div className="brand" style={{ padding: '4px 0 18px' }}>Quesna Go</div>
-        <h2 className="page-title">دخول لوحة التحكم</h2>
-        <p className="page-sub">أدمن / مشرف / صاحب متجر / دليفري</p>
+        <div className="brand" style={{ padding: '4px 0 14px', justifyContent: 'center' }}>Quesna Go</div>
+        <h2 className="page-title" style={{ textAlign: 'center', marginBottom: 18 }}>دخول لوحة التحكم</h2>
         <ErrBox error={error} />
         <Field label="الإيميل أو رقم الموبايل">
           <input value={id} onChange={(e) => setId(e.target.value)} placeholder="admin@quesnago.com" autoFocus />
