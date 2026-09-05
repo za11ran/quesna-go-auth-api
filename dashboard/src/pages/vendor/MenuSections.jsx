@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { api } from '../../api';
 import { useAsync, ErrBox, Empty, Modal, Field } from '../../ui';
 
-// أقسام قائمة المطعم (بيتزا/برجر/مشويات...) — تعديل فوري، بدون مراجعة إدارة
+// أقسام المتجر (بيتزا/برجر لمطعم، ألبان/مشروبات لسوبر ماركت، أدوية/مستحضرات
+// لصيدلية...) — تعديل فوري، بدون مراجعة إدارة
 export default function MenuSections() {
   const { data, loading, error, reload } = useAsync(() => api.get('/api/vendor/menu-sections'));
   const [edit, setEdit] = useState(null);
@@ -12,8 +13,8 @@ export default function MenuSections() {
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1 className="page-title">أقسام القائمة</h1>
-          <p className="page-sub">قسّم المنتجات في التطبيق (بيتزا، برجر، مشويات...) — تعديل فوري</p>
+          <h1 className="page-title">الأقسام</h1>
+          <p className="page-sub">قسّم منتجاتك زي ما يناسب متجرك — تعديل فوري</p>
         </div>
         <button className="btn primary" onClick={() => setEdit({})}>+ قسم</button>
       </div>
@@ -74,8 +75,8 @@ function SectionModal({ s, onClose, onDone }) {
       footer={<button className="btn primary" disabled={busy || !f.name_ar} onClick={submit}>حفظ</button>}>
       <ErrBox error={error} />
       <div className="grid k2">
-        <Field label="الاسم (عربي)"><input value={f.name_ar} onChange={set('name_ar')} placeholder="بيتزا" /></Field>
-        <Field label="الاسم (إنجليزي)"><input value={f.name_en} onChange={set('name_en')} placeholder="Pizza" /></Field>
+        <Field label="الاسم (عربي)"><input value={f.name_ar} onChange={set('name_ar')} placeholder="مثال: ألبان" /></Field>
+        <Field label="الاسم (إنجليزي)"><input value={f.name_en} onChange={set('name_en')} placeholder="e.g. Dairy" /></Field>
       </div>
       <Field label="الترتيب"><input type="number" value={f.sort_order} onChange={set('sort_order')} /></Field>
     </Modal>

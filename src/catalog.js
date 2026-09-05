@@ -29,6 +29,7 @@ const CATEGORY_LABELS = {
   pharmacy: { ar: 'صيدلية', en: 'Pharmacy' },
   bakery: { ar: 'مخبز', en: 'Bakery' },
   cafe: { ar: 'كافيه', en: 'Cafe' },
+  vegetables: { ar: 'خضار وفاكهة', en: 'Fruits & Vegetables' },
   other: { ar: 'متجر', en: 'Store' },
 };
 
@@ -159,6 +160,13 @@ router.get('/vendors', async (req, res, next) => {
     if (req.query.type) {
       params.push(String(req.query.type));
       where.push(`v.type = $${params.length}`);
+    } else if (req.query.exclude_type) {
+      // زر "المزيد" في الرئيسية — كل الأنواع عدا اللي ليها كارت مخصّص أصلًا.
+      const excluded = String(req.query.exclude_type).split(',').map((s) => s.trim()).filter(Boolean);
+      if (excluded.length) {
+        params.push(excluded);
+        where.push(`v.type <> ALL($${params.length}::text[])`);
+      }
     }
     if (req.query.search) {
       params.push(`%${String(req.query.search).trim()}%`);

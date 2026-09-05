@@ -123,7 +123,7 @@ function CreateVendor({ onClose, onDone }) {
       <Field label="اسم المتجر (إنجليزي)"><input value={f.name_en} onChange={set('name_en')} /></Field>
       <Field label="النوع">
         <select value={f.type} onChange={set('type')}>
-          {['restaurant', 'supermarket', 'pharmacy', 'bakery', 'cafe', 'other'].map((t) => <option key={t} value={t}>{t}</option>)}
+          {['restaurant', 'supermarket', 'pharmacy', 'bakery', 'cafe', 'vegetables', 'other'].map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
       </Field>
       <Field label="تليفون"><input value={f.phone} onChange={set('phone')} /></Field>

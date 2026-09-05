@@ -1,20 +1,16 @@
 import { useCallback, useState } from 'react';
 import { api, apiBase } from '../../api';
 import { useAsync, ErrBox, Empty, Pill, Modal, Field, Money } from '../../ui';
-import { SUPERMARKET_CATEGORIES as CATS } from '../../constants';
 
 export default function VendorProducts() {
   const { data, loading, error, reload } = useAsync(() => api.get('/api/vendor/products?per_page=100'));
-  const { data: vendorData } = useAsync(() => api.get('/api/vendor/profile'));
   const { data: sectionsData } = useAsync(() => api.get('/api/vendor/menu-sections'));
   const [edit, setEdit] = useState(null);      // product for edit modal
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
   const rows = data?.data || [];
-  const isRestaurant = vendorData?.type === 'restaurant';
   const sections = sectionsData?.data || [];
-  const colCount = isRestaurant ? 8 : 7;
 
   const patch = useCallback(async (id, patchBody) => {
     setBusy(id); setMsg(null);
@@ -35,10 +31,10 @@ export default function VendorProducts() {
       {msg && <div className="err">{msg}</div>}
       <div className="card" style={{ overflow: 'auto' }}>
         <table>
-          <thead><tr><th>المنتج</th><th>السعر</th><th>القسم</th>{isRestaurant && <th>قسم القائمة</th>}<th>الكمية</th><th>متاح؟</th><th>حالة</th><th></th></tr></thead>
+          <thead><tr><th>المنتج</th><th>السعر</th><th>القسم</th><th>الكمية</th><th>متاح؟</th><th>حالة</th><th></th></tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={colCount} className="empty">تحميل…</td></tr>
-              : rows.length === 0 ? <tr><td colSpan={colCount}><Empty /></td></tr>
+            {loading ? <tr><td colSpan={7} className="empty">تحميل…</td></tr>
+              : rows.length === 0 ? <tr><td colSpan={7}><Empty /></td></tr>
               : rows.map((p) => (
                 <tr key={p.id}>
                   <td className="row">
@@ -46,16 +42,13 @@ export default function VendorProducts() {
                     {p.name_ar}
                   </td>
                   <td><Money v={p.price} /></td>
-                  <td>{p.category || '—'}</td>
-                  {isRestaurant && (
-                    <td style={{ width: 140 }}>
-                      <select value={p.menu_section_id || ''} disabled={busy === p.id}
-                        onChange={(e) => patch(p.id, { menu_section_id: e.target.value || null })}>
-                        <option value="">بدون قسم</option>
-                        {sections.map((s) => <option key={s.id} value={s.id}>{s.name_ar}</option>)}
-                      </select>
-                    </td>
-                  )}
+                  <td style={{ width: 140 }}>
+                    <select value={p.menu_section_id || ''} disabled={busy === p.id}
+                      onChange={(e) => patch(p.id, { menu_section_id: e.target.value || null })}>
+                      <option value="">بدون قسم</option>
+                      {sections.map((s) => <option key={s.id} value={s.id}>{s.name_ar}</option>)}
+                    </select>
+                  </td>
                   <td style={{ width: 130 }}>
                     <input type="number" defaultValue={p.stock ?? ''} placeholder="∞" style={{ width: 70 }}
                       onBlur={(e) => {
@@ -82,10 +75,10 @@ export default function VendorProducts() {
         </table>
       </div>
       {edit && (
-        <EditProduct p={edit} isRestaurant={isRestaurant} onClose={() => setEdit(null)} onDone={() => { setEdit(null); reload(); }} />
+        <EditProduct p={edit} sections={sections} onClose={() => setEdit(null)} onDone={() => { setEdit(null); reload(); }} />
       )}
       {creating && (
-        <CreateProduct isRestaurant={isRestaurant} sections={sections} onClose={() => setCreating(false)} onDone={() => { setCreating(false); reload(); }} />
+        <CreateProduct sections={sections} onClose={() => setCreating(false)} onDone={() => { setCreating(false); reload(); }} />
       )}
     </>
   );
@@ -111,8 +104,23 @@ function ImgBtn({ id, onDone }) {
   );
 }
 
-function EditProduct({ p, isRestaurant, onClose, onDone }) {
-  const [f, setF] = useState({ name_ar: p.name_ar, name_en: p.name_en, price: p.price, category: p.category || 'other', description_ar: p.description_ar || '', image: p.image || '' });
+function SectionField({ value, onChange, sections }) {
+  return (
+    <Field label="القسم">
+      <select value={value || ''} onChange={onChange}>
+        <option value="">بدون قسم</option>
+        {sections.map((s) => <option key={s.id} value={s.id}>{s.name_ar}</option>)}
+      </select>
+    </Field>
+  );
+}
+
+function EditProduct({ p, sections, onClose, onDone }) {
+  const [f, setF] = useState({
+    name_ar: p.name_ar, name_en: p.name_en, price: p.price,
+    description_ar: p.description_ar || '', image: p.image || '',
+    menu_section_id: p.menu_section_id || '',
+  });
   const [opts, setOpts] = useState(p.options || []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -122,8 +130,11 @@ function EditProduct({ p, isRestaurant, onClose, onDone }) {
   async function submit() {
     setBusy(true); setError(null);
     try {
-      const body = { ...f, price: hasOptions ? Math.min(...opts.map((o) => Number(o.price) || 0)) : Number(f.price) };
-      if (isRestaurant) delete body.category; // مفيش أقسام سوبر ماركت للمطاعم — بيستخدموا قسم القائمة من الجدول
+      const body = {
+        ...f,
+        price: hasOptions ? Math.min(...opts.map((o) => Number(o.price) || 0)) : Number(f.price),
+        menu_section_id: f.menu_section_id || null,
+      };
       if (opts.length || (p.options || []).length) body.options = opts.map((o) => ({ ...o, price: Number(o.price) }));
       await api.put(`/api/vendor/products/${p.id}`, body);
       onDone();
@@ -146,19 +157,10 @@ function EditProduct({ p, isRestaurant, onClose, onDone }) {
           <input value={f.image} onChange={set('image')} placeholder="https://..." style={{ flex: 1 }} />
         </div>
       </Field>
-      {!hasOptions && (
-        isRestaurant ? (
-          <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>
-        ) : (
-          <div className="grid k2">
-            <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>
-            <Field label="القسم"><select value={f.category} onChange={set('category')}>{CATS.map((c) => <option key={c}>{c}</option>)}</select></Field>
-          </div>
-        )
-      )}
-      {hasOptions && !isRestaurant && (
-        <Field label="القسم"><select value={f.category} onChange={set('category')}>{CATS.map((c) => <option key={c}>{c}</option>)}</select></Field>
-      )}
+      <div className="grid k2">
+        {!hasOptions && <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>}
+        <SectionField value={f.menu_section_id} onChange={set('menu_section_id')} sections={sections} />
+      </div>
       <Field label="الوصف"><textarea rows={2} value={f.description_ar} onChange={set('description_ar')} /></Field>
       <OptionsEditor opts={opts} setOpts={setOpts} />
       {hasOptions && (
@@ -170,8 +172,8 @@ function EditProduct({ p, isRestaurant, onClose, onDone }) {
   );
 }
 
-function CreateProduct({ isRestaurant, sections, onClose, onDone }) {
-  const [f, setF] = useState({ name_ar: '', name_en: '', price: '', category: 'other', menu_section_id: '', stock: '', description_ar: '', image: '' });
+function CreateProduct({ sections, onClose, onDone }) {
+  const [f, setF] = useState({ name_ar: '', name_en: '', price: '', menu_section_id: '', stock: '', description_ar: '', image: '' });
   const [opts, setOpts] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -187,8 +189,6 @@ function CreateProduct({ isRestaurant, sections, onClose, onDone }) {
         stock: f.stock === '' ? null : Number(f.stock),
         menu_section_id: f.menu_section_id || null,
       };
-      if (isRestaurant) delete body.category; // مفيش أقسام سوبر ماركت للمطاعم
-      else delete body.menu_section_id;
       if (opts.length) body.options = opts.map((o) => ({ ...o, price: Number(o.price) }));
       await api.post('/api/vendor/products', body);
       onDone();
@@ -208,16 +208,7 @@ function CreateProduct({ isRestaurant, sections, onClose, onDone }) {
       <div className={hasOptions ? 'grid k2' : 'grid k3'}>
         {!hasOptions && <Field label="السعر"><input type="number" value={f.price} onChange={set('price')} /></Field>}
         <Field label="الكمية (فاضي = غير محدود)"><input type="number" value={f.stock} onChange={set('stock')} /></Field>
-        {isRestaurant ? (
-          <Field label="قسم القائمة">
-            <select value={f.menu_section_id} onChange={set('menu_section_id')}>
-              <option value="">بدون قسم</option>
-              {sections.map((s) => <option key={s.id} value={s.id}>{s.name_ar}</option>)}
-            </select>
-          </Field>
-        ) : (
-          <Field label="القسم"><select value={f.category} onChange={set('category')}>{CATS.map((c) => <option key={c}>{c}</option>)}</select></Field>
-        )}
+        <SectionField value={f.menu_section_id} onChange={set('menu_section_id')} sections={sections} />
       </div>
       <Field label="الوصف"><textarea rows={2} value={f.description_ar} onChange={set('description_ar')} /></Field>
       <OptionsEditor opts={opts} setOpts={setOpts} />

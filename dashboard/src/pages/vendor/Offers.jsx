@@ -1,16 +1,13 @@
 import { useState } from 'react';
 import { api } from '../../api';
 import { useAsync, ErrBox, Empty, Pill, Modal, Field, Money } from '../../ui';
-import { SUPERMARKET_CATEGORIES as CATS } from '../../constants';
 
 export default function VendorOffers() {
   const { data, loading, error, reload } = useAsync(() => api.get('/api/vendor/offers'));
-  const { data: vendorData } = useAsync(() => api.get('/api/vendor/profile'));
   const { data: sectionsData } = useAsync(() => api.get('/api/vendor/menu-sections'));
   const { data: productsData } = useAsync(() => api.get('/api/vendor/products?per_page=200'));
   const [edit, setEdit] = useState(null); // offer or {} for new
   const rows = data?.data || [];
-  const isRestaurant = vendorData?.type === 'restaurant';
   const sections = sectionsData?.data || [];
   const products = productsData?.data || [];
 
@@ -21,11 +18,8 @@ export default function VendorOffers() {
       return `منتج · ${p ? p.name_ar : o.target_id}`;
     }
     if (o.scope === 'category') {
-      if (isRestaurant) {
-        const s = sections.find((x) => String(x.id) === o.target_id);
-        return `قسم · ${s ? s.name_ar : o.target_id}`;
-      }
-      return `قسم · ${o.target_id}`;
+      const s = sections.find((x) => String(x.id) === o.target_id);
+      return `قسم · ${s ? s.name_ar : o.target_id}`;
     }
     return o.scope;
   }
@@ -66,7 +60,7 @@ export default function VendorOffers() {
       </div>
       {edit && (
         <OfferModal
-          o={edit} isRestaurant={isRestaurant} sections={sections} products={products}
+          o={edit} sections={sections} products={products}
           onClose={() => setEdit(null)} onDone={() => { setEdit(null); reload(); }}
         />
       )}
@@ -74,7 +68,7 @@ export default function VendorOffers() {
   );
 }
 
-function OfferModal({ o, isRestaurant, sections, products, onClose, onDone }) {
+function OfferModal({ o, sections, products, onClose, onDone }) {
   const isNew = !o.id;
   const initialProduct = o.scope === 'product' ? products.find((p) => p.id === o.target_id) : null;
   const initialOldPrice = initialProduct ? initialProduct.price : '';
@@ -139,27 +133,18 @@ function OfferModal({ o, isRestaurant, sections, products, onClose, onDone }) {
       <Field label="النطاق">
         <select value={f.scope} onChange={set('scope')}>
           <option value="store">المتجر كله</option>
-          <option value="category">{isRestaurant ? 'قسم قائمة' : 'قسم'}</option>
+          <option value="category">قسم</option>
           <option value="product">منتج</option>
         </select>
       </Field>
 
       {f.scope === 'category' && (
-        isRestaurant ? (
-          <Field label="قسم القائمة">
-            <select value={f.target_id} onChange={set('target_id')}>
-              <option value="">اختر قسم</option>
-              {sections.map((s) => <option key={s.id} value={s.id}>{s.name_ar}</option>)}
-            </select>
-          </Field>
-        ) : (
-          <Field label="القسم">
-            <select value={f.target_id} onChange={set('target_id')}>
-              <option value="">اختر قسم</option>
-              {CATS.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </Field>
-        )
+        <Field label="القسم">
+          <select value={f.target_id} onChange={set('target_id')}>
+            <option value="">اختر قسم</option>
+            {sections.map((s) => <option key={s.id} value={s.id}>{s.name_ar}</option>)}
+          </select>
+        </Field>
       )}
 
       {isProductScope ? (
