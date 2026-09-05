@@ -162,7 +162,7 @@ function EditProduct({ p, sections, onClose, onDone }) {
         <SectionField value={f.menu_section_id} onChange={set('menu_section_id')} sections={sections} />
       </div>
       <Field label="الوصف"><textarea rows={2} value={f.description_ar} onChange={set('description_ar')} /></Field>
-      <OptionsEditor opts={opts} setOpts={setOpts} />
+      <OptionsEditor opts={opts} setOpts={setOpts} productId={p.id} />
       {hasOptions && (
         <p className="page-sub" style={{ marginTop: -6 }}>
           المنتج له أكتر من حجم/نوع، فسعره بياخده من أقل سعر بينهم — مفيش سعر منفصل للمنتج نفسه.
@@ -221,19 +221,55 @@ function CreateProduct({ sections, onClose, onDone }) {
   );
 }
 
-function OptionsEditor({ opts, setOpts }) {
+// productId موجود بس في وضع التعديل (منتج له id حقيقي بالفعل) — وقتها كل
+// اختيار (لو له id) يقدر يرفعله صورة مباشرة (فورًا، زي صورة المنتج الأساسية).
+// في وضع الإنشاء (منتج لسه مالوش id) بنسيب رابط صورة يُلصق بدل الرفع، زي
+// بالظبط صورة المنتج نفسه في CreateProduct.
+function OptionsEditor({ opts, setOpts, productId }) {
+  const [uploading, setUploading] = useState(null); // index بيرفعله صورة دلوقتي
   const upd = (i, k, v) => setOpts(opts.map((o, j) => (j === i ? { ...o, [k]: v } : o)));
+
+  async function uploadOptionImage(i, file) {
+    const o = opts[i];
+    if (!productId || !o.id) return;
+    setUploading(i);
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const res = await api.upload(`/api/vendor/products/${productId}/options/${o.id}/image`, fd);
+      upd(i, 'image', res.url);
+    } finally {
+      setUploading(null);
+    }
+  }
+
   return (
     <div>
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
         <label style={{ fontWeight: 700, color: 'var(--muted)' }}>الأحجام / الأنواع (سعر نهائي لكل واحد)</label>
-        <button className="btn sm" onClick={() => setOpts([...opts, { id: `o${opts.length + 1}`, name_ar: '', name_en: '', price: 0, is_available: true }])}>+ صف</button>
+        <button className="btn sm" onClick={() => setOpts([...opts, { id: `o${opts.length + 1}`, name_ar: '', name_en: '', price: 0, is_available: true, image: '' }])}>+ صف</button>
       </div>
+      <p className="page-sub" style={{ margin: '0 0 8px' }}>
+        صورة الاختيار اختيارية — مفيدة لو المنتج بيتباع بأكتر من لون/شكل مختلف الشكل عن التاني.
+      </p>
       {opts.map((o, i) => (
-        <div key={i} className="row" style={{ marginBottom: 6 }}>
+        <div key={i} className="row" style={{ marginBottom: 6, alignItems: 'center' }}>
+          {o.image && (
+            <img src={o.image.startsWith('http') ? o.image : apiBase + o.image} alt=""
+              width={28} height={28} style={{ borderRadius: 6, objectFit: 'cover' }} />
+          )}
           <input placeholder="المعرّف" value={o.id} onChange={(e) => upd(i, 'id', e.target.value)} style={{ width: 90 }} />
           <input placeholder="الاسم" value={o.name_ar} onChange={(e) => upd(i, 'name_ar', e.target.value)} />
           <input type="number" placeholder="السعر" value={o.price} onChange={(e) => upd(i, 'price', e.target.value)} style={{ width: 90 }} />
+          {productId ? (
+            <label className="btn sm" style={{ opacity: uploading === i ? 0.5 : 1 }}>
+              {uploading === i ? '…' : (o.image ? 'تغيير الصورة' : 'صورة')}
+              <input type="file" accept="image/*" hidden disabled={uploading === i || !o.id}
+                onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadOptionImage(i, file); }} />
+            </label>
+          ) : (
+            <input placeholder="رابط صورة (اختياري)" value={o.image || ''} onChange={(e) => upd(i, 'image', e.target.value)} style={{ width: 130 }} />
+          )}
           <label className="row" style={{ gap: 4 }}><input type="checkbox" checked={o.is_available !== false} onChange={(e) => upd(i, 'is_available', e.target.checked)} /> متاح</label>
           <button className="btn sm danger" onClick={() => setOpts(opts.filter((_, j) => j !== i))}>×</button>
         </div>

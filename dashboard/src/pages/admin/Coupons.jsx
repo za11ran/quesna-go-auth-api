@@ -34,8 +34,10 @@ function CouponFieldToggle() {
 
 export default function Coupons() {
   const { data, loading, error, reload } = useAsync(() => api.get('/api/admin/coupons'));
+  const { data: vendorsData } = useAsync(() => api.get('/api/admin/vendors'));
   const [edit, setEdit] = useState(null); // coupon or {} for new
   const rows = data?.data || [];
+  const vendors = vendorsData?.data || [];
 
   return (
     <>
@@ -52,16 +54,17 @@ export default function Coupons() {
         <table>
           <thead>
             <tr>
-              <th>الكود</th><th>الخصم</th><th>الحد الأدنى للطلب</th>
+              <th>الكود</th><th>المتجر</th><th>الخصم</th><th>الحد الأدنى للطلب</th>
               <th>الاستخدام</th><th>الفترة</th><th>مفعّل؟</th><th></th>
             </tr>
           </thead>
           <tbody>
-            {loading ? <tr><td colSpan={7} className="empty">تحميل…</td></tr>
-              : rows.length === 0 ? <tr><td colSpan={7}><Empty /></td></tr>
+            {loading ? <tr><td colSpan={8} className="empty">تحميل…</td></tr>
+              : rows.length === 0 ? <tr><td colSpan={8}><Empty /></td></tr>
               : rows.map((c) => (
                 <tr key={c.id}>
                   <td><code>{c.code}</code></td>
+                  <td>{c.vendor_id ? (c.vendor_name_ar || c.vendor_id) : <span className="page-sub">كل المتاجر</span>}</td>
                   <td>{c.discount_type === 'percent' ? `${Number(c.discount_value)}%` : `${Number(c.discount_value)} ج.م`}</td>
                   <td>{Number(c.min_order_amount) > 0 ? `${Number(c.min_order_amount)} ج.م` : '—'}</td>
                   <td>{c.used_count}{c.max_uses != null ? ` / ${c.max_uses}` : ''}</td>
@@ -83,15 +86,16 @@ export default function Coupons() {
           </tbody>
         </table>
       </div>
-      {edit && <CouponModal c={edit} onClose={() => setEdit(null)} onDone={() => { setEdit(null); reload(); }} />}
+      {edit && <CouponModal c={edit} vendors={vendors} onClose={() => setEdit(null)} onDone={() => { setEdit(null); reload(); }} />}
     </>
   );
 }
 
-function CouponModal({ c, onClose, onDone }) {
+function CouponModal({ c, vendors, onClose, onDone }) {
   const isNew = !c.id;
   const [f, setF] = useState({
     code: c.code || '',
+    vendor_id: c.vendor_id || '',
     discount_type: c.discount_type || 'percent',
     discount_value: c.discount_value ?? 10,
     min_order_amount: c.min_order_amount ?? 0,
@@ -110,6 +114,7 @@ function CouponModal({ c, onClose, onDone }) {
       const body = {
         ...f,
         code: f.code.trim().toUpperCase(),
+        vendor_id: f.vendor_id || null,
         discount_value: Number(f.discount_value),
         min_order_amount: Number(f.min_order_amount) || 0,
         max_uses: f.max_uses === '' ? null : Number(f.max_uses),
@@ -128,6 +133,15 @@ function CouponModal({ c, onClose, onDone }) {
       <ErrBox error={error} />
       <Field label="الكود">
         <input value={f.code} onChange={set('code')} placeholder="WELCOME10" style={{ textTransform: 'uppercase' }} />
+      </Field>
+      <Field label="مقصور على متجر (اختياري)">
+        <select value={f.vendor_id} onChange={set('vendor_id')}>
+          <option value="">كل المتاجر</option>
+          {vendors.map((v) => <option key={v.id} value={v.id}>{v.name_ar}</option>)}
+        </select>
+        <p className="page-sub" style={{ margin: '4px 0 0' }}>
+          لو محدّد متجر، الخصم هيتحسب بس على أصناف المتجر ده من السلة، ومش هيشتغل لو المتجر ده مش موجود في الطلب.
+        </p>
       </Field>
       <div className="grid k2">
         <Field label="نوع الخصم">

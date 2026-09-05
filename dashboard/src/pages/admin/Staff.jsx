@@ -2,6 +2,13 @@ import { useState } from 'react';
 import { api } from '../../api';
 import { useAsync, ErrBox, Empty, Pill, Modal, Field, statusTone, label } from '../../ui';
 
+// "شغال دلوقتي؟" — مشتقة من last_seen_at (بصمة نشاط بترجع من كل طلب محمي
+// للوحة، شوف staff-auth.js)، مش زرار يدوي زي is_online بتاع الدليفري.
+function isOnlineNow(lastSeenAt) {
+  if (!lastSeenAt) return false;
+  return Date.now() - new Date(lastSeenAt).getTime() < 90 * 1000;
+}
+
 // kind: 'drivers' | 'dispatchers'
 export default function Staff({ kind }) {
   const isDriver = kind === 'drivers';
@@ -17,6 +24,19 @@ export default function Staff({ kind }) {
     finally { setBusyId(null); }
   }
 
+  async function remove(row) {
+    if (!confirm(`حذف ${row.name} نهائيًا؟`)) return;
+    setBusyId(row.id);
+    try {
+      await api.del(isDriver ? `/api/admin/drivers/${row.id}` : `/api/admin/staff/${row.id}`);
+      reload();
+    } catch (e) {
+      alert(e?.message || 'تعذّر الحذف');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -29,7 +49,7 @@ export default function Staff({ kind }) {
       <ErrBox error={error} />
       <div className="card" style={{ overflow: 'auto' }}>
         <table>
-          <thead><tr><th>الاسم</th><th>الموبايل</th><th>الإيميل</th>{isDriver && <th>الحالة</th>}{isDriver && <th>توصيلات</th>}<th>مفعّل؟</th>{isDriver && <th>دخول من التطبيق</th>}<th></th></tr></thead>
+          <thead><tr><th>الاسم</th><th>الموبايل</th><th>الإيميل</th>{isDriver && <th>الحالة</th>}{isDriver && <th>توصيلات</th>}{!isDriver && <th>شغال دلوقتي؟</th>}<th>مفعّل؟</th>{isDriver && <th>دخول من التطبيق</th>}<th></th></tr></thead>
           <tbody>
             {loading ? <tr><td colSpan={8} className="empty">تحميل…</td></tr>
               : rows.length === 0 ? <tr><td colSpan={8}><Empty /></td></tr>
@@ -40,6 +60,13 @@ export default function Staff({ kind }) {
                   <td>{r.email || '—'}</td>
                   {isDriver && <td><Pill tone={statusTone(r.status)}>{label(r.status)}</Pill></td>}
                   {isDriver && <td>{r.deliveries_count}</td>}
+                  {!isDriver && (
+                    <td>
+                      {isOnlineNow(r.last_seen_at)
+                        ? <Pill tone="ok">شغال</Pill>
+                        : <Pill>غير متصل</Pill>}
+                    </td>
+                  )}
                   <td>{(isDriver ? r.account_active : r.is_active) === false ? '✕' : '✓'}</td>
                   {isDriver && (
                     <td>
@@ -51,7 +78,10 @@ export default function Staff({ kind }) {
                       />
                     </td>
                   )}
-                  <td><button className="btn sm" onClick={() => setEditing(r)}>تعديل</button></td>
+                  <td className="row">
+                    <button className="btn sm" onClick={() => setEditing(r)}>تعديل</button>
+                    <button className="btn sm danger" disabled={busyId === r.id} onClick={() => remove(r)}>حذف</button>
+                  </td>
                 </tr>
               ))}
           </tbody>

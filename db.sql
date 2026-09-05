@@ -258,6 +258,9 @@ CREATE TABLE IF NOT EXISTS product_options (
     sort_order    SMALLINT NOT NULL DEFAULT 0,
     PRIMARY KEY (product_id, id)
 );
+-- صورة مخصوصة لكل اختيار (مفيدة لمنتج بألوان/أنواع مختلفة شكلها مختلف —
+-- مثلًا لو المنتج بيتباع بأكتر من لون) — NULL = يستخدم صورة المنتج الأساسية.
+ALTER TABLE product_options ADD COLUMN IF NOT EXISTS image TEXT;
 
 -- ---------- أقسام قائمة المطعم (لكل تاجر، يديرها من لوحته) ----------
 CREATE TABLE IF NOT EXISTS menu_sections (
@@ -425,6 +428,10 @@ CREATE TABLE IF NOT EXISTS coupons (
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_coupons_code ON coupons ((UPPER(code)));
+-- NULL = كود عام على كل الطلب؛ لو متحدّد، الخصم بيتحسب على subtotal بتاع
+-- المتجر ده بس من السلة (مش على كل الطلب)، ومينفعش يتطبّق لو المتجر مش موجود
+-- في السلة أصلًا.
+ALTER TABLE coupons ADD COLUMN IF NOT EXISTS vendor_id VARCHAR(60) REFERENCES vendors(id) ON DELETE CASCADE;
 
 CREATE TABLE IF NOT EXISTS order_vendors (
     order_id     VARCHAR(30) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -512,6 +519,10 @@ CREATE TABLE IF NOT EXISTS staff_users (
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- آخر مرة الحساب عمل فيها طلب للوحة — بيتحدّث من staff-auth.js على كل طلب
+-- محمي (مش أكتر من مرة كل دقيقة). "شغال دلوقتي؟" = last_seen_at خلال آخر
+-- دقيقة ونص، زي is_online بتاع الدليفري بس مشتقة من النشاط الفعلي مش زرار.
+ALTER TABLE staff_users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_staff_role   ON staff_users(role);
 CREATE INDEX IF NOT EXISTS idx_staff_vendor ON staff_users(vendor_id);
 

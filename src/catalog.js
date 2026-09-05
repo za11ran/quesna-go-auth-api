@@ -77,6 +77,7 @@ function serializeOption(o, productPrice, lang) {
     additional_price: Math.round((price - productPrice) * 100) / 100,
     stock: o.stock === null || o.stock === undefined ? null : Number(o.stock),
     is_available: o.is_available,
+    image: o.image || null,
   };
 }
 

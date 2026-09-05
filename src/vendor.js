@@ -259,6 +259,7 @@ router.put('/products/:id', vendorRole, async (req, res, next) => {
         id: String(o.id), name_ar: String(o.name_ar || o.name || ''), name_en: String(o.name_en || o.name || ''),
         price: Number(o.price), stock: o.stock === null || o.stock === undefined ? null : parseInt(o.stock, 10),
         is_available: o.is_available !== false,
+        image: o.image ? String(o.image) : null,
       }));
     }
     if (!Object.keys(changes).length && !optionsChanged) {
@@ -292,9 +293,9 @@ router.put('/products/:id', vendorRole, async (req, res, next) => {
       for (let i = 0; i < optionsChanged.length; i++) {
         const o = optionsChanged[i];
         await db.query(
-          `INSERT INTO product_options (product_id, id, name_ar, name_en, price, stock, is_available, sort_order)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-          [req.params.id, o.id, o.name_ar, o.name_en, o.price, o.stock ?? null, o.is_available !== false, i + 1]
+          `INSERT INTO product_options (product_id, id, name_ar, name_en, price, stock, is_available, sort_order, image)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [req.params.id, o.id, o.name_ar, o.name_en, o.price, o.stock ?? null, o.is_available !== false, i + 1, o.image ?? null]
         );
       }
       await db.query(`UPDATE products SET has_options = $2 WHERE id = $1`, [req.params.id, optionsChanged.length > 0]);
@@ -325,6 +326,7 @@ router.post('/products', vendorRole, async (req, res, next) => {
           id: String(o.id), name_ar: String(o.name_ar || o.name || ''), name_en: String(o.name_en || o.name || ''),
           price: Number(o.price), stock: o.stock === null || o.stock === undefined ? null : parseInt(o.stock, 10),
           is_available: o.is_available !== false,
+          image: o.image ? String(o.image) : null,
         }))
       : null;
 
@@ -353,9 +355,9 @@ router.post('/products', vendorRole, async (req, res, next) => {
         for (let i = 0; i < options.length; i++) {
           const o = options[i];
           await db.query(
-            `INSERT INTO product_options (product_id, id, name_ar, name_en, price, stock, is_available, sort_order)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [pid, o.id, o.name_ar, o.name_en, o.price, o.stock ?? null, o.is_available !== false, i + 1]
+            `INSERT INTO product_options (product_id, id, name_ar, name_en, price, stock, is_available, sort_order, image)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [pid, o.id, o.name_ar, o.name_en, o.price, o.stock ?? null, o.is_available !== false, i + 1, o.image ?? null]
           );
         }
       }
@@ -416,6 +418,25 @@ router.post('/products/:id/image', vendorRole, imageUpload, async (req, res, nex
       currentValues: { image: cur.image || null }, newValues: { image: img.url },
     });
     res.status(202).json({ ...out, url: img.url });
+  } catch (e) { next(e); }
+});
+
+// POST /vendor/products/:id/options/:optionId/image — صورة مخصوصة لاختيار
+// واحد (مثلًا لون معيّن) — مفيدة لمنتج بيتباع بأكتر من شكل/لون. فوري دايمًا
+// (زي صورة المنتج الأساسية) — مش حقل حسّاس يحتاج موافقة أدمن.
+router.post('/products/:id/options/:optionId/image', vendorRole, imageUpload, async (req, res, next) => {
+  try {
+    if (req.staff.role !== 'vendor_owner') return fail(res, 403, 'FORBIDDEN', 'صلاحية غير كافية');
+    const owns = await db.query(`SELECT 1 FROM products WHERE id = $1 AND vendor_id = $2 AND deleted_at IS NULL`, [req.params.id, req.staff.vendor_id]);
+    if (!owns.rowCount) return fail(res, 404, 'PRODUCT_NOT_FOUND', 'المنتج غير موجود');
+    if (!req.file) return fail(res, 422, 'IMAGE_REQUIRED', 'الصورة مطلوبة');
+    const img = await saveImage(req.file, { folder: 'products', width: 1000 });
+    const r = await db.query(
+      `UPDATE product_options SET image = $3 WHERE product_id = $1 AND id = $2 RETURNING id`,
+      [req.params.id, req.params.optionId, img.url]
+    );
+    if (!r.rowCount) return fail(res, 404, 'OPTION_NOT_FOUND', 'الاختيار غير موجود');
+    res.json({ success: true, url: img.url });
   } catch (e) { next(e); }
 });
 

@@ -329,6 +329,24 @@ router.put('/vendors/:id', adminOnly, async (req, res, next) => {
   }
 });
 
+// حذف منطقي — تاريخ طلبات المتجر (orders/order_vendors) بيفضل سليم، والمتجر
+// بيختفي من كل واجهات العميل (كل حاجة بتفلتر deleted_at IS NULL بالفعل).
+// بيوقف كمان دخول صاحب المتجر وموظفينه.
+router.delete('/vendors/:id', adminOnly, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `UPDATE vendors SET deleted_at = now(), is_active = false, is_open = false, updated_at = now()
+        WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+      [req.params.id]
+    );
+    if (!rows.length) return fail(res, 404, 'VENDOR_NOT_FOUND', 'المتجر غير موجود');
+    await db.query(`UPDATE staff_users SET is_active = false WHERE vendor_id = $1`, [req.params.id]);
+    res.json({ success: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // حسابات دخول المتجر ده (صاحبه + موظفينه) — لعرضها وتعديل اسمها/باسوردها من لوحة الأدمن
 router.get('/vendors/:id/staff', adminOnly, async (req, res, next) => {
   try {
@@ -559,9 +577,12 @@ router.post('/vendors', adminOnly, async (req, res, next) => {
       || (wh.always_open ? 'مفتوح 24 ساعة' : `يوميًا ${timeArabic(b.opens_at || '10:00')} - ${timeArabic(b.closes_at || '02:00')}`);
     const whTextEn = b.working_hours_text_en || (wh.always_open ? 'Open 24 hours' : whTextAr);
 
+    // "استلام الطلبات" بيتبدأ بـ manual (المشرف بيتصل بالتاجر تليفونيًا) لحد ما
+    // يتدرّب على تطبيق التاجر — الأدمن بعدين يحوّله لـ "من تطبيق التاجر" من نفس
+    // الصف في لوحة «التجّار» (order_mode).
     await db.query(
-      `INSERT INTO vendors (id, name_ar, name_en, type, phone, working_hours, working_hours_text_ar, working_hours_text_en, status, is_active)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'approved',true)`,
+      `INSERT INTO vendors (id, name_ar, name_en, type, phone, working_hours, working_hours_text_ar, working_hours_text_en, status, is_active, order_mode)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'approved',true,'manual')`,
       [id, String(b.name_ar || b.name_en), String(b.name_en || b.name_ar),
        b.type || 'restaurant', b.phone || null, JSON.stringify(wh), whTextAr, whTextEn]
     );
@@ -618,9 +639,11 @@ router.post('/drivers', adminOnly, async (req, res, next) => {
        VALUES ($1,$2,$3,$4,'driver',$5) RETURNING id`,
       [String(b.name), String(b.phone), b.email || null, hash, did]
     );
+    // دخول الدليفري من تطبيق العميل مفعّل على طول من إنشائه — الأدمن يقدر
+    // يوقفه بعدين من لوحة «المشرفين/الدليفري» (drivers.app_access_enabled).
     await db.query(
-      `INSERT INTO drivers (id, staff_user_id, name, phone, vehicle_type, zone, status, is_online)
-       VALUES ($1,$2,$3,$4,$5,$6,'offline',false)`,
+      `INSERT INTO drivers (id, staff_user_id, name, phone, vehicle_type, zone, status, is_online, app_access_enabled)
+       VALUES ($1,$2,$3,$4,$5,$6,'offline',false,true)`,
       [did, staff.rows[0].id, String(b.name), String(b.phone), b.vehicle_type || 'motorcycle', b.zone || null]
     );
     res.status(201).json({ driver_id: did, staff_user_id: staff.rows[0].id });
@@ -655,10 +678,21 @@ router.put('/drivers/:id', adminOnly, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// حذف فعلي — بيشيل صف الدليفري وحساب دخوله. الطلبات القديمة (orders.driver_id
+// مجرد نص، مفيش مفتاح أجنبي) بتفضل موجودة بس من غير ربط بدليفري لسه موجود.
+router.delete('/drivers/:id', adminOnly, async (req, res, next) => {
+  try {
+    const r = await db.query(`DELETE FROM drivers WHERE id = $1`, [req.params.id]);
+    if (!r.rowCount) return fail(res, 404, 'DRIVER_NOT_FOUND', 'الدليفري غير موجود');
+    await db.query(`DELETE FROM staff_users WHERE driver_id = $1`, [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { next(e); }
+});
+
 /* ================= حسابات المشرفين ================= */
 router.get('/dispatchers', adminOnly, async (req, res, next) => {
   try {
-    const { rows } = await db.query(`SELECT id, name, email, phone, is_active, last_login_at, created_at FROM staff_users WHERE role = 'dispatcher' ORDER BY created_at DESC`);
+    const { rows } = await db.query(`SELECT id, name, email, phone, is_active, last_login_at, last_seen_at, created_at FROM staff_users WHERE role = 'dispatcher' ORDER BY created_at DESC`);
     res.json({ data: rows });
   } catch (e) { next(e); }
 });
@@ -716,6 +750,32 @@ router.put('/staff/:id', adminOnly, async (req, res, next) => {
     res.json(staff);
   } catch (e) {
     if (e.code === '23505') return fail(res, 409, 'EXISTS', 'الإيميل أو الموبايل مستخدم');
+    next(e);
+  }
+});
+
+// حذف عام لأي حساب لوحة (مشرف/أدمن/صاحب متجر/موظف متجر) — الدليفري له مسار
+// خاص (DELETE /drivers/:id) عشان بيشيل صف drivers المرتبط كمان. ممنوع تحذف
+// نفسك أو آخر أدمن فعّال في النظام عشان محدش يقفل الدخول على الجميع.
+router.delete('/staff/:id', adminOnly, async (req, res, next) => {
+  try {
+    if (req.params.id === req.staff.id) {
+      return fail(res, 422, 'CANNOT_DELETE_SELF', 'متقدرش تحذف حسابك بنفسك');
+    }
+    const target = (await db.query(`SELECT role FROM staff_users WHERE id = $1`, [req.params.id])).rows[0];
+    if (!target) return fail(res, 404, 'STAFF_NOT_FOUND', 'الحساب غير موجود');
+    if (target.role === 'driver') {
+      return fail(res, 422, 'USE_DRIVER_DELETE', 'استخدم حذف الدليفري بدل ده');
+    }
+    if (target.role === 'admin') {
+      const activeAdmins = await db.query(`SELECT count(*)::int AS c FROM staff_users WHERE role = 'admin' AND is_active = true`);
+      if (activeAdmins.rows[0].c <= 1) {
+        return fail(res, 422, 'LAST_ADMIN', 'مينفعش تحذف آخر حساب أدمن فعّال');
+      }
+    }
+    await db.query(`DELETE FROM staff_users WHERE id = $1`, [req.params.id]);
+    res.json({ success: true });
+  } catch (e) {
     next(e);
   }
 });
@@ -792,6 +852,11 @@ router.get('/reports', adminOnly, async (req, res, next) => {
 /* -------- إحصائيات تفصيلية: مشرفين / تجّار / دليفري -------- */
 router.get('/analytics', adminOnly, async (req, res, next) => {
   try {
+    // فترة اختيارية (from/to = تاريخ YYYY-MM-DD) — لو مش متبعتة، كل الوقت
+    // (وللدليفري: نفس عدّاد التوصيلات التاريخي المحفوظ، أسرع من حساب حي).
+    const from = req.query.from || null;
+    const to = req.query.to || null;
+
     const [dispatchers, vendors, driversRes] = await Promise.all([
       db.query(
         `SELECT su.id, su.name, su.phone,
@@ -799,32 +864,57 @@ router.get('/analytics', adminOnly, async (req, res, next) => {
                 count(o.id) FILTER (WHERE o.status = 'delivered')::int AS orders_delivered
            FROM staff_users su
            LEFT JOIN orders o ON o.dispatcher_id = su.id
+             AND ($1::date IS NULL OR o.placed_at >= $1::date)
+             AND ($2::date IS NULL OR o.placed_at < $2::date + interval '1 day')
           WHERE su.role = 'dispatcher'
           GROUP BY su.id
-          ORDER BY orders_assigned DESC, su.name ASC`
+          ORDER BY orders_assigned DESC, su.name ASC`,
+        [from, to]
       ),
       db.query(
         `SELECT v.id, v.name_ar, v.name_en, v.type,
-                count(DISTINCT ov.order_id)::int AS orders_count,
-                count(DISTINCT ov.order_id) FILTER (WHERE o.status = 'delivered')::int AS orders_delivered,
-                COALESCE(sum(ov.subtotal) FILTER (WHERE o.status = 'delivered'), 0)::float AS revenue_delivered
+                count(x.order_id)::int AS orders_count,
+                count(x.order_id) FILTER (WHERE x.status = 'delivered')::int AS orders_delivered,
+                COALESCE(sum(x.subtotal) FILTER (WHERE x.status = 'delivered'), 0)::float AS revenue_delivered
            FROM vendors v
-           LEFT JOIN order_vendors ov ON ov.vendor_id = v.id
-           LEFT JOIN orders o ON o.id = ov.order_id
+           LEFT JOIN (
+             SELECT ov.vendor_id, ov.order_id, ov.subtotal, o.status
+               FROM order_vendors ov
+               JOIN orders o ON o.id = ov.order_id
+              WHERE ($1::date IS NULL OR o.placed_at >= $1::date)
+                AND ($2::date IS NULL OR o.placed_at < $2::date + interval '1 day')
+           ) x ON x.vendor_id = v.id
           WHERE v.deleted_at IS NULL
           GROUP BY v.id
-          ORDER BY orders_count DESC, v.name_ar ASC`
+          ORDER BY orders_count DESC, v.name_ar ASC`,
+        [from, to]
       ),
       // deliveries_count بتتحسب من فعل التسليم الحقيقي (driver.js عند status=delivered)
       // فهي أدق مقياس لـ"أكتر حد شغال" من عدّ orders.driver_id (بتتغيّر لو الطلب اتنقل لدليفري تاني).
+      // لو فيه فترة محدّدة، بنحسب عدد التوصيلات جواها فعليًا (طلب عادي + طلب سريع)
+      // بدل العدّاد التراكمي اللي مش بيفرّق بين الفترات.
       db.query(
-        `SELECT id, name, phone, vehicle_type, status, is_online, zone,
-                deliveries_count, rating
-           FROM drivers
-          ORDER BY deliveries_count DESC, name ASC`
+        `WITH ranged AS (
+           SELECT driver_id, count(*)::int AS c
+             FROM (
+               SELECT driver_id, placed_at AS at FROM orders WHERE status = 'delivered' AND driver_id IS NOT NULL
+               UNION ALL
+               SELECT driver_id, created_at AS at FROM quick_orders WHERE status = 'delivered' AND driver_id IS NOT NULL
+             ) u
+            WHERE ($1::date IS NULL OR at >= $1::date)
+              AND ($2::date IS NULL OR at < $2::date + interval '1 day')
+            GROUP BY driver_id
+         )
+         SELECT d.id, d.name, d.phone, d.vehicle_type, d.status, d.is_online, d.zone, d.rating,
+                CASE WHEN $1::date IS NULL AND $2::date IS NULL THEN d.deliveries_count ELSE COALESCE(r.c, 0) END AS deliveries_count
+           FROM drivers d
+           LEFT JOIN ranged r ON r.driver_id = d.id
+          ORDER BY deliveries_count DESC, d.name ASC`,
+        [from, to]
       ),
     ]);
     res.json({
+      period: { from, to },
       dispatchers: dispatchers.rows,
       vendors: vendors.rows,
       drivers: driversRes.rows,
@@ -835,7 +925,11 @@ router.get('/analytics', adminOnly, async (req, res, next) => {
 /* ================= أكواد الخصم (Coupons) ================= */
 router.get('/coupons', adminOnly, async (req, res, next) => {
   try {
-    const { rows } = await db.query(`SELECT * FROM coupons ORDER BY created_at DESC`);
+    const { rows } = await db.query(
+      `SELECT c.*, v.name_ar AS vendor_name_ar, v.name_en AS vendor_name_en
+         FROM coupons c LEFT JOIN vendors v ON v.id = c.vendor_id
+        ORDER BY c.created_at DESC`
+    );
     res.json({ data: rows });
   } catch (e) { next(e); }
 });
@@ -846,10 +940,15 @@ router.post('/coupons', adminOnly, async (req, res, next) => {
     const code = String(b.code || '').trim().toUpperCase();
     if (!code) return fail(res, 422, 'CODE_REQUIRED', 'كود الخصم مطلوب');
     if (num(b.discount_value) === null) return fail(res, 422, 'DISCOUNT_VALUE_REQUIRED', 'قيمة الخصم مطلوبة');
+    const vendorId = b.vendor_id ? String(b.vendor_id) : null;
+    if (vendorId) {
+      const v = await db.query(`SELECT 1 FROM vendors WHERE id = $1`, [vendorId]);
+      if (!v.rowCount) return fail(res, 422, 'VENDOR_NOT_FOUND', 'المتجر غير موجود');
+    }
     try {
       const { rows } = await db.query(
-        `INSERT INTO coupons (code, discount_type, discount_value, min_order_amount, max_uses, starts_at, ends_at, is_active)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        `INSERT INTO coupons (code, discount_type, discount_value, min_order_amount, max_uses, starts_at, ends_at, is_active, vendor_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
         [
           code,
           b.discount_type === 'amount' ? 'amount' : 'percent',
@@ -859,6 +958,7 @@ router.post('/coupons', adminOnly, async (req, res, next) => {
           b.starts_at || null,
           b.ends_at || null,
           b.is_active !== false,
+          vendorId,
         ]
       );
       res.status(201).json(rows[0]);
@@ -875,11 +975,19 @@ router.put('/coupons/:id', adminOnly, async (req, res, next) => {
     if (!cur) return fail(res, 404, 'COUPON_NOT_FOUND', 'الكود غير موجود');
     const b = req.body || {};
     const code = b.code !== undefined && String(b.code).trim() ? String(b.code).trim().toUpperCase() : cur.code;
+    let vendorId = cur.vendor_id;
+    if (b.vendor_id !== undefined) {
+      vendorId = b.vendor_id ? String(b.vendor_id) : null;
+      if (vendorId) {
+        const v = await db.query(`SELECT 1 FROM vendors WHERE id = $1`, [vendorId]);
+        if (!v.rowCount) return fail(res, 422, 'VENDOR_NOT_FOUND', 'المتجر غير موجود');
+      }
+    }
     try {
       const { rows } = await db.query(
         `UPDATE coupons SET code=$1, discount_type=$2, discount_value=$3, min_order_amount=$4,
-                            max_uses=$5, starts_at=$6, ends_at=$7, is_active=$8
-          WHERE id = $9 RETURNING *`,
+                            max_uses=$5, starts_at=$6, ends_at=$7, is_active=$8, vendor_id=$9
+          WHERE id = $10 RETURNING *`,
         [
           code,
           b.discount_type === 'amount' ? 'amount' : (b.discount_type === 'percent' ? 'percent' : cur.discount_type),
@@ -889,6 +997,7 @@ router.put('/coupons/:id', adminOnly, async (req, res, next) => {
           b.starts_at !== undefined ? (b.starts_at || null) : cur.starts_at,
           b.ends_at !== undefined ? (b.ends_at || null) : cur.ends_at,
           b.is_active !== undefined ? b.is_active !== false : cur.is_active,
+          vendorId,
           req.params.id,
         ]
       );

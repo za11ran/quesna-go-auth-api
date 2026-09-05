@@ -27,6 +27,19 @@ export default function Vendors() {
     finally { setBusyId(null); }
   }
 
+  async function remove(v) {
+    if (!confirm(`حذف متجر "${v.name_ar}"؟ هيختفي من التطبيق فورًا (تاريخ طلباته بيفضل موجود).`)) return;
+    setBusyId(v.id);
+    try {
+      await api.del(`/api/admin/vendors/${v.id}`);
+      reload();
+    } catch (e) {
+      alert(e?.message || 'تعذّر الحذف');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -80,6 +93,7 @@ export default function Vendors() {
                       <button className="btn sm danger" disabled={busyId === v.id} onClick={() => act(v.id, 'suspend')}>تعليق</button>
                     )}
                     <button className="btn sm" disabled={busyId === v.id} onClick={() => setEditing(v)}>تعديل</button>
+                    <button className="btn sm danger" disabled={busyId === v.id} onClick={() => remove(v)}>حذف</button>
                   </td>
                 </tr>
               ))}

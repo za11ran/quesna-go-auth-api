@@ -15,7 +15,21 @@ const MESSAGES = {
   COUPON_NOT_STARTED: 'الكود لسه مش متاح',
   COUPON_EXPIRED: 'انتهت صلاحية الكود',
   COUPON_USES_EXCEEDED: 'الكود وصل للحد الأقصى للاستخدام',
+  COUPON_VENDOR_MISMATCH: 'الكود ده خاص بمتجر تاني مش في طلبك',
 };
+
+// الكود لو مربوط بمتجر معيّن (coupon.vendor_id)، الخصم بيتحسب بس على subtotal
+// بتاع المتجر ده من السلة (مش على كل الطلب)، ولازم المتجر يكون فعلًا موجود في
+// السلة. الكود العام (vendor_id = null) بيفضل يتحسب على subtotal الطلب كله
+// زي ما كان بالظبط.
+function subtotalForCoupon(coupon, { subtotal, vendorSubtotals }) {
+  if (!coupon.vendor_id) return { ok: true, subtotal: Number(subtotal) || 0 };
+  const vs = vendorSubtotals && Object.prototype.hasOwnProperty.call(vendorSubtotals, coupon.vendor_id)
+    ? Number(vendorSubtotals[coupon.vendor_id])
+    : null;
+  if (vs == null) return { ok: false };
+  return { ok: true, subtotal: vs };
+}
 
 // يدوّر على كود صالح (مفعّل + في الفترة الزمنية + مستخدَم أقل من الحد الأقصى).
 // مش بيتحقق من الحد الأدنى للطلب هنا — ده محتاج الـ subtotal من الكولر.
@@ -52,8 +66,13 @@ router.post('/coupons/validate', authRequired, async (req, res, next) => {
     const { coupon, error } = await findValidCoupon(b.code);
     if (error) return fail(res, 422, error, MESSAGES[error]);
 
-    const subtotal = Number(b.subtotal) || 0;
-    if (subtotal < Number(coupon.min_order_amount)) {
+    const scoped = subtotalForCoupon(coupon, {
+      subtotal: b.subtotal,
+      vendorSubtotals: b.vendor_subtotals,
+    });
+    if (!scoped.ok) return fail(res, 422, 'COUPON_VENDOR_MISMATCH', MESSAGES.COUPON_VENDOR_MISMATCH);
+
+    if (scoped.subtotal < Number(coupon.min_order_amount)) {
       return fail(
         res, 422, 'COUPON_MIN_ORDER_NOT_MET',
         `الحد الأدنى لاستخدام الكود ${Number(coupon.min_order_amount)} ج.م`
@@ -65,11 +84,15 @@ router.post('/coupons/validate', authRequired, async (req, res, next) => {
       code: coupon.code,
       discount_type: coupon.discount_type,
       discount_value: Number(coupon.discount_value),
-      discount_amount: computeDiscount(coupon, subtotal),
+      discount_amount: computeDiscount(coupon, scoped.subtotal),
+      vendor_id: coupon.vendor_id || null,
     });
   } catch (e) {
     next(e);
   }
 });
 
-module.exports = { router, findValidCoupon, computeDiscount, COUPON_MESSAGES: MESSAGES };
+module.exports = {
+  router, findValidCoupon, computeDiscount, subtotalForCoupon,
+  COUPON_MESSAGES: MESSAGES,
+};

@@ -106,9 +106,9 @@ async function applyChangeRequest(cr) {
         for (let i = 0; i < nv.options.length; i++) {
           const o = nv.options[i];
           await db.query(
-            `INSERT INTO product_options (product_id, id, name_ar, name_en, price, stock, is_available, sort_order)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [cr.entity_id, o.id, o.name_ar, o.name_en, o.price, o.stock ?? null, o.is_available !== false, i + 1]
+            `INSERT INTO product_options (product_id, id, name_ar, name_en, price, stock, is_available, sort_order, image)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [cr.entity_id, o.id, o.name_ar, o.name_en, o.price, o.stock ?? null, o.is_available !== false, i + 1, o.image ?? null]
           );
         }
       }
@@ -125,9 +125,9 @@ async function applyChangeRequest(cr) {
         for (let i = 0; i < nv.options.length; i++) {
           const o = nv.options[i];
           await db.query(
-            `INSERT INTO product_options (product_id, id, name_ar, name_en, price, stock, is_available, sort_order)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [cr.entity_id, o.id, o.name_ar, o.name_en, o.price, o.stock ?? null, o.is_available !== false, i + 1]
+            `INSERT INTO product_options (product_id, id, name_ar, name_en, price, stock, is_available, sort_order, image)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [cr.entity_id, o.id, o.name_ar, o.name_en, o.price, o.stock ?? null, o.is_available !== false, i + 1, o.image ?? null]
           );
         }
         await db.query(`UPDATE products SET has_options = $2 WHERE id = $1`, [cr.entity_id, nv.options.length > 0]);

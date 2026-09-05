@@ -1,52 +1,72 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { clearSession } from './api';
 
+// كل مجموعة: { section: عنوان القسم أو null, items: [ [مسار, اسم, end?] ] }
 const NAV = {
   admin: [
-    ['/admin', 'نظرة عامة', true],
-    ['/admin/analytics', 'الإحصائيات'],
-    ['/admin/change-requests', 'طلبات التغيير'],
-    ['/admin/vendors', 'التجّار'],
-    ['/admin/categories', 'الأقسام'],
-    ['/admin/banners', 'البانرات'],
-    ['/admin/coupons', 'أكواد الخصم'],
-    ['/admin/most-requested', 'الأكثر طلبًا'],
-    ['/admin/delivery-pricing', 'أسعار التوصيل'],
-    ['/admin/drivers', 'الدليفري'],
-    ['/admin/dispatchers', 'المشرفين'],
-    ['/admin/orders', 'الطلبات'],
+    { section: null, items: [['/admin', 'نظرة عامة', true]] },
+    { section: 'العمليات', items: [
+      ['/admin/orders', 'الطلبات'],
+      ['/admin/analytics', 'الإحصائيات'],
+      ['/admin/change-requests', 'طلبات التغيير'],
+    ] },
+    { section: 'الحسابات', items: [
+      ['/admin/vendors', 'التجّار'],
+      ['/admin/drivers', 'الدليفري'],
+      ['/admin/dispatchers', 'المشرفين'],
+    ] },
+    { section: 'المحتوى', items: [
+      ['/admin/categories', 'الأقسام'],
+      ['/admin/banners', 'البانرات'],
+      ['/admin/most-requested', 'الأكثر طلبًا'],
+    ] },
+    { section: 'الإعدادات', items: [
+      ['/admin/coupons', 'أكواد الخصم'],
+      ['/admin/delivery-pricing', 'أسعار التوصيل'],
+    ] },
   ],
   dispatcher: [
-    ['/dispatch', 'الطابور', true],
-    ['/dispatch/drivers', 'الدليفري'],
+    { section: null, items: [
+      ['/dispatch', 'الطابور', true],
+      ['/dispatch/drivers', 'الدليفري'],
+    ] },
   ],
   vendor_owner: [
-    ['/vendor', 'الطلبات', true],
-    ['/vendor/products', 'المنتجات'],
-    ['/vendor/menu-sections', 'الأقسام'],
-    ['/vendor/offers', 'العروض'],
-    ['/vendor/profile', 'بيانات المتجر'],
-    ['/vendor/change-requests', 'طلبات التغيير'],
+    { section: null, items: [
+      ['/vendor', 'الطلبات', true],
+      ['/vendor/products', 'المنتجات'],
+      ['/vendor/menu-sections', 'الأقسام'],
+      ['/vendor/offers', 'العروض'],
+      ['/vendor/profile', 'بيانات المتجر'],
+      ['/vendor/change-requests', 'طلبات التغيير'],
+    ] },
   ],
   vendor_staff: [
-    ['/vendor', 'الطلبات', true],
-    ['/vendor/products', 'المنتجات'],
-    ['/vendor/menu-sections', 'الأقسام'],
+    { section: null, items: [
+      ['/vendor', 'الطلبات', true],
+      ['/vendor/products', 'المنتجات'],
+      ['/vendor/menu-sections', 'الأقسام'],
+    ] },
   ],
-  driver: [['/driver', 'طلباتي', true]],
+  driver: [{ section: null, items: [['/driver', 'طلباتي', true]] }],
 };
 
 export default function Layout({ role, children }) {
   const nav = useNavigate();
-  const items = NAV[role] || [];
+  const groups = NAV[role] || [];
   return (
     <div className="shell">
       <aside className="side">
         <div className="brand">Quesna Go</div>
-        {items.map(([to, label, end]) => (
-          <NavLink key={to} to={to} end={end} className={({ isActive }) => `navlink ${isActive ? 'active' : ''}`}>
-            {label}
-          </NavLink>
+        {groups.map((g, gi) => (
+          <div key={gi} className="nav-group">
+            {g.section && <div className="nav-section-title">{g.section}</div>}
+            {g.items.map(([to, label, end]) => (
+              <NavLink key={to} to={to} end={end} className={({ isActive }) => `navlink ${isActive ? 'active' : ''}`}>
+                {label}
+              </NavLink>
+            ))}
+          </div>
         ))}
         <div className="spacer" />
         <div className="navlink" style={{ color: 'var(--muted)' }}>{{

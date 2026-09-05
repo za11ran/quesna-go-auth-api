@@ -20,6 +20,7 @@ const { imagesUpload, saveImages } = require('./upload');
 const {
   findValidCoupon,
   computeDiscount: computeCouponDiscount,
+  subtotalForCoupon,
   COUPON_MESSAGES,
 } = require('./coupons');
 const { computeDeliveryTotal } = require('./deliveryPricing');
@@ -192,10 +193,14 @@ router.post('/orders', authRequired, async (req, res, next) => {
     if (body.coupon_code) {
       const { coupon, error } = await findValidCoupon(body.coupon_code);
       if (error) return fail(res, 422, error, COUPON_MESSAGES[error]);
-      if (subtotal < Number(coupon.min_order_amount)) {
+      const vendorSubtotals = {};
+      for (const a of Object.values(vendorAgg)) vendorSubtotals[a.vendor_id] = a.subtotal;
+      const scoped = subtotalForCoupon(coupon, { subtotal, vendorSubtotals });
+      if (!scoped.ok) return fail(res, 422, 'COUPON_VENDOR_MISMATCH', COUPON_MESSAGES.COUPON_VENDOR_MISMATCH);
+      if (scoped.subtotal < Number(coupon.min_order_amount)) {
         return fail(res, 422, 'COUPON_MIN_ORDER_NOT_MET', `الحد الأدنى لاستخدام الكود ${Number(coupon.min_order_amount)} ج.م`);
       }
-      couponDiscount = computeCouponDiscount(coupon, subtotal);
+      couponDiscount = computeCouponDiscount(coupon, scoped.subtotal);
       couponCode = coupon.code;
     }
 

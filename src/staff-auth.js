@@ -37,6 +37,12 @@ function staffAuth(roles) {
       return res.status(401).json({ success: false, error_code: 'AUTH_INVALID', message: 'الحساب غير مفعّل', timestamp: new Date().toISOString() });
     }
     req.staff = { id: rows[0].id, role: rows[0].role, vendor_id: rows[0].vendor_id, driver_id: rows[0].driver_id };
+    // "شغال دلوقتي؟" في لوحة المشرفين — بصمة نشاط بسيطة، مش أكتر من مرة كل
+    // دقيقة عشان ما نعملش UPDATE على كل طلب. من غير انتظار الرد (fire-and-forget).
+    db.query(
+      `UPDATE staff_users SET last_seen_at = now() WHERE id = $1 AND (last_seen_at IS NULL OR last_seen_at < now() - interval '60 seconds')`,
+      [rows[0].id]
+    ).catch(() => {});
     next();
   };
 }
