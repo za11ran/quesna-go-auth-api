@@ -1,5 +1,6 @@
-// إرسال Push فعلي عبر Firebase Cloud Messaging لأجهزة العميل المسجّلة (user_devices).
-// مفتاح الخدمة سرّي — مش موجود في الريبو، بيتحدد مساره بمتغيّر بيئة
+// إرسال Push فعلي عبر Firebase Cloud Messaging — لأجهزة العميل (user_devices)
+// أو الدليفري (driver_devices، وضع الدليفري جوه تطبيق العميل). مفتاح الخدمة
+// سرّي — مش موجود في الريبو، بيتحدد مساره بمتغيّر بيئة
 // FIREBASE_SERVICE_ACCOUNT_PATH. لو مش موجود، بنتجاهل الإرسال بصمت (التخزين في
 // notifications + البث اللحظي عبر Socket.IO شغّالين برضو بدونه).
 const path = require('path');
@@ -32,13 +33,12 @@ const INVALID_TOKEN_ERRORS = new Set([
   'messaging/registration-token-not-registered',
 ]);
 
-// بيبعت push لكل أجهزة عميل واحد. صامت تمامًا لو مفيش مفتاح Firebase أو مفيش
-// أجهزة مسجّلة — النداء آمن يتكرر من notify() لأي إشعار.
-async function sendPush(userId, { title, body, data = {} }) {
+// منطق مشترك: يجيب توكنز جهاز معيّن من جدول معيّن، يبعت، ويشيل التوكنز البايظة.
+async function sendToTable({ table, idColumn, idValue, title, body, data }) {
   const client = getMessagingClient();
   if (!client) return;
   try {
-    const { rows } = await db.query(`SELECT token FROM user_devices WHERE user_id = $1`, [userId]);
+    const { rows } = await db.query(`SELECT token FROM ${table} WHERE ${idColumn} = $1`, [idValue]);
     if (!rows.length) return;
     const tokens = rows.map((r) => r.token);
 
@@ -58,11 +58,22 @@ async function sendPush(userId, { title, body, data = {} }) {
       if (!r.success && INVALID_TOKEN_ERRORS.has(r.error?.code)) staleTokens.push(tokens[i]);
     });
     if (staleTokens.length) {
-      await db.query(`DELETE FROM user_devices WHERE user_id = $1 AND token = ANY($2::text[])`, [userId, staleTokens]);
+      await db.query(`DELETE FROM ${table} WHERE ${idColumn} = $1 AND token = ANY($2::text[])`, [idValue, staleTokens]);
     }
   } catch (e) {
     console.error('[push] فشل الإرسال:', e.message);
   }
 }
 
-module.exports = { sendPush };
+// بيبعت push لكل أجهزة عميل واحد. صامت تمامًا لو مفيش مفتاح Firebase أو مفيش
+// أجهزة مسجّلة — النداء آمن يتكرر من notify() لأي إشعار.
+async function sendPush(userId, { title, body, data = {} }) {
+  return sendToTable({ table: 'user_devices', idColumn: 'user_id', idValue: userId, title, body, data });
+}
+
+// نفس الفكرة، بس لأجهزة الدليفري (وضع الدليفري جوه تطبيق العميل).
+async function sendDriverPush(driverId, { title, body, data = {} }) {
+  return sendToTable({ table: 'driver_devices', idColumn: 'driver_id', idValue: driverId, title, body, data });
+}
+
+module.exports = { sendPush, sendDriverPush };

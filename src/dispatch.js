@@ -11,6 +11,7 @@ const { staffAuth } = require('./staff-auth');
 const { loadOrder, serializeOrder, setStatus } = require('./orderView');
 const { notify } = require('./notify');
 const { emitTo } = require('./realtime');
+const { sendDriverPush } = require('./push');
 
 const nowIso = () => new Date().toISOString();
 const fail = (res, s, code, message) =>
@@ -64,6 +65,13 @@ async function assignToDriver(orderId, driver, dispatcherId, { reassign = false 
     });
   }
   emitTo(`driver:${driver.id}`, 'driver:assignment', { order_id: orderId });
+  // push فعلي (وضع الدليفري جوه تطبيق العميل) — notify() فوق ده للوحة الويب بس
+  // (staff_users مالهاش user_devices)، فاحتجنا مسار منفصل هنا.
+  sendDriverPush(driver.id, {
+    title: 'تعيين توصيل جديد',
+    body: `طلب ${orderId} جاهز — روح استلمه`,
+    data: { type: 'order_assigned', order_id: orderId },
+  });
 }
 
 /* -------- orders queue -------- */

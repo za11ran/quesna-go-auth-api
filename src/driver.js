@@ -1,7 +1,7 @@
 // Driver App API — BACKEND_HANDOFF.md §4
 //   POST /driver/auth/login       POST /driver/auth/app-login (من تطبيق العميل)
 //   GET /driver/me
-//   PUT  /driver/status           POST /driver/location
+//   PUT  /driver/status           POST /driver/location    POST /driver/devices
 //   GET  /driver/orders           GET /driver/orders/:id
 //   POST /driver/orders/:id/accept    POST /driver/orders/:id/reject
 //   PATCH /driver/orders/:id/status
@@ -102,6 +102,23 @@ router.put('/status', driverRole, async (req, res, next) => {
       [d.id, s, s === 'available']
     );
     res.json({ success: true, status: s });
+  } catch (e) { next(e); }
+});
+
+// تسجيل توكن Push للدليفري (وضع الدليفري جوه تطبيق العميل).
+router.post('/devices', driverRole, async (req, res, next) => {
+  try {
+    const d = await myDriver(req);
+    if (!d) return fail(res, 404, 'DRIVER_NOT_FOUND', 'حساب الدليفري غير مربوط');
+    const b = req.body || {};
+    if (!b.token) return fail(res, 422, 'TOKEN_REQUIRED', 'توكن الجهاز مطلوب');
+    await db.query(
+      `INSERT INTO driver_devices (driver_id, token, platform)
+       VALUES ($1,$2,$3)
+       ON CONFLICT (driver_id, token) DO UPDATE SET platform = EXCLUDED.platform, updated_at = now()`,
+      [d.id, String(b.token), b.platform ? String(b.platform).slice(0, 10) : null]
+    );
+    res.json({ success: true });
   } catch (e) { next(e); }
 });
 

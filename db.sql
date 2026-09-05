@@ -548,6 +548,18 @@ CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status, is_online);
 -- (زرار "دخول كدليفري" في صفحة البروفايل)، منفصل عن دخوله للوحة التحكم على الويب.
 ALTER TABLE drivers ADD COLUMN IF NOT EXISTS app_access_enabled BOOLEAN NOT NULL DEFAULT false;
 
+-- توكنات push بتاعة الدليفري (وضع الدليفري جوه تطبيق العميل) — منفصلة عن
+-- user_devices لأن الدليفري حساب drivers/staff_users مش users.
+CREATE TABLE IF NOT EXISTS driver_devices (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    driver_id  VARCHAR(60) NOT NULL REFERENCES drivers(id) ON DELETE CASCADE,
+    token      TEXT NOT NULL,
+    platform   VARCHAR(10),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (driver_id, token)
+);
+
 -- حالة الدليفري الفرعية داخل التوصيل
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS driver_sub_status VARCHAR(20);
 -- تخفيض المخزون عند قبول التاجر — علم إن الطلب اتخصم مخزونه
