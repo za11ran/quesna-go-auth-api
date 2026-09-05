@@ -148,6 +148,7 @@ function EditVendor({ vendor, onClose, onDone }) {
     name_ar: vendor.name_ar || '', name_en: vendor.name_en || '',
     description_ar: vendor.description_ar || '', description_en: vendor.description_en || '',
     phone: vendor.phone || '',
+    rating: vendor.rating ?? 0, reviews_count: vendor.reviews_count ?? 0,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -201,6 +202,18 @@ function EditVendor({ vendor, onClose, onDone }) {
       <Field label="الوصف (عربي)"><input value={f.description_ar} onChange={set('description_ar')} /></Field>
       <Field label="الوصف (إنجليزي)"><input value={f.description_en} onChange={set('description_en')} /></Field>
       <Field label="تليفون"><input value={f.phone} onChange={set('phone')} /></Field>
+
+      <div className="grid k2">
+        <Field label="التقييم (من 0 لـ 5)">
+          <input type="number" min="0" max="5" step="0.1" value={f.rating} onChange={set('rating')} />
+        </Field>
+        <Field label="عدد التقييمات">
+          <input type="number" min="0" step="1" value={f.reviews_count} onChange={set('reviews_count')} />
+        </Field>
+      </div>
+      <p className="page-sub" style={{ margin: '-4px 0 10px' }}>
+        بيتحدّثوا تلقائي أول ما عميل يقيّم المتجر من التطبيق — عدّلهم هنا بس لو عايز تظبطهم يدويًا.
+      </p>
 
       <hr style={{ border: 0, borderTop: '1px solid var(--line)', margin: '14px 0' }} />
       <strong>حسابات الدخول</strong>

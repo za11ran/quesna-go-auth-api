@@ -2,6 +2,7 @@
 // متوافق مع BACKEND_HANDOFF.md §7 و §10.
 //   GET /api/vendors?type=&search=&page=&per_page=
 //   GET /api/vendors/:id
+//   POST /api/vendors/:id/ratings   {rating: 1-5}   (تقييم/تحديث تقييم عميل واحد)
 //   GET /api/vendors/:id/products?category=&search=&page=
 //   GET /api/vendors/:id/products/:productId
 //   GET /api/home/categories
@@ -9,9 +10,12 @@
 //   GET /api/offers
 const router = require('express').Router();
 const db = require('./db');
+const { authRequired } = require('./auth');
 const { langOf } = require('./lang'); // هيدر LANG أو ?lang= (ar|en)
 
 const num = (v) => (v === null || v === undefined ? v : Number(v));
+const fail = (res, s, code, message) =>
+  res.status(s).json({ success: false, error_code: code, message, timestamp: new Date().toISOString() });
 
 function paging(req) {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -30,6 +34,8 @@ const CATEGORY_LABELS = {
   bakery: { ar: 'مخبز', en: 'Bakery' },
   cafe: { ar: 'كافيه', en: 'Cafe' },
   vegetables: { ar: 'خضار وفاكهة', en: 'Fruits & Vegetables' },
+  clothing: { ar: 'ملابس', en: 'Clothing' },
+  stationery: { ar: 'مكتبة', en: 'Stationery' },
   other: { ar: 'متجر', en: 'Store' },
 };
 
@@ -201,6 +207,49 @@ router.get('/vendors/:id', async (req, res, next) => {
         .json({ success: false, error_code: 'VENDOR_NOT_FOUND', message: 'المتجر غير موجود', timestamp: new Date().toISOString() });
     }
     res.json(serializeVendor(rows[0], lang));
+  } catch (e) {
+    next(e);
+  }
+});
+
+/* ---------------- POST /api/vendors/:id/ratings (تقييم عميل واحد بنجمة) ---------------- */
+// كان الزرار موجود في التطبيق بيبعت هنا بالفعل من غير ما يكون فيه مسار حقيقي
+// وراه — كل تقييم كان بيفشل (404) والرقم اللي بيظهر للعميل بعده كان وهمي
+// (حساب محلي في التطبيق نفسه، مش من السيرفر). تحديث تقييم نفس العميل بيستبدل
+// القديم بتاعه (مش يضاف تقييم تاني)، ومتوسط/عدد vendors.rating/reviews_count
+// بيتحدّثوا يعكسوا vendor_ratings دايمًا.
+router.post('/vendors/:id/ratings', authRequired, async (req, res, next) => {
+  try {
+    const rating = parseInt((req.body || {}).rating, 10);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return fail(res, 422, 'INVALID_RATING', 'التقييم لازم يكون رقم من 1 لـ 5');
+    }
+    const vendorExists = await db.query(
+      `SELECT 1 FROM vendors WHERE id = $1 AND deleted_at IS NULL`,
+      [req.params.id]
+    );
+    if (!vendorExists.rowCount) return fail(res, 404, 'VENDOR_NOT_FOUND', 'المتجر غير موجود');
+
+    await db.query(
+      `INSERT INTO vendor_ratings (vendor_id, customer_id, rating)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (vendor_id, customer_id)
+       DO UPDATE SET rating = EXCLUDED.rating, updated_at = now()`,
+      [req.params.id, req.user.sub, rating]
+    );
+
+    const agg = await db.query(
+      `SELECT COALESCE(AVG(rating), 0)::numeric(3,2) AS avg_rating, count(*)::int AS c
+         FROM vendor_ratings WHERE vendor_id = $1`,
+      [req.params.id]
+    );
+    const { avg_rating: avgRating, c: reviewsCount } = agg.rows[0];
+    await db.query(
+      `UPDATE vendors SET rating = $2, reviews_count = $3, updated_at = now() WHERE id = $1`,
+      [req.params.id, avgRating, reviewsCount]
+    );
+
+    res.json({ success: true, rating: Number(avgRating), reviews_count: reviewsCount, my_rating: rating });
   } catch (e) {
     next(e);
   }

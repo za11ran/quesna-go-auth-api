@@ -285,6 +285,20 @@ router.put('/vendors/:id', adminOnly, async (req, res, next) => {
       params.push(k === 'avg_prep_time_minutes' ? num(b[k]) : String(b[k]));
       cols.push(`${k} = $${params.length}`);
     }
+    // الأدمن يقدر يظبط رقم التقييم يدويًا (مثلًا متجر جديد لسه ملوش تقييمات
+    // حقيقية كفاية) — بيغلب أي حساب تلقائي من vendor_ratings لحد ما يتقيّم تاني.
+    if (b.rating !== undefined) {
+      const r = num(b.rating);
+      if (r === null || r < 0 || r > 5) return fail(res, 422, 'INVALID_RATING', 'التقييم لازم يكون بين 0 و5');
+      params.push(r);
+      cols.push(`rating = $${params.length}`);
+    }
+    if (b.reviews_count !== undefined) {
+      const c = parseInt(b.reviews_count, 10);
+      if (Number.isNaN(c) || c < 0) return fail(res, 422, 'INVALID_REVIEWS_COUNT', 'عدد التقييمات لازم يكون صفر أو أكتر');
+      params.push(c);
+      cols.push(`reviews_count = $${params.length}`);
+    }
     if (!cols.length) return fail(res, 422, 'NOTHING_TO_UPDATE', 'مفيش تعديلات');
     params.push(req.params.id);
     const { rows } = await db.query(`UPDATE vendors SET ${cols.join(', ')}, updated_at = now() WHERE id = $${params.length} RETURNING *`, params);

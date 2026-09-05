@@ -183,6 +183,19 @@ UPDATE vendors SET min_order = 0 WHERE min_order <> 0;
 CREATE INDEX IF NOT EXISTS idx_vendors_type   ON vendors(type) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_vendors_status ON vendors(status);
 
+-- تقييم عميل واحد لكل متجر — تحديث التقييم بيستبدل القديم (مش تقييم جديد
+-- منفصل)، فـ vendors.rating/reviews_count دايمًا متطابقين مع متوسط/عدد صفوف
+-- الجدول ده. الأدمن يقدر يغلب الرقم ده يدويًا من لوحته (PUT /admin/vendors/:id)،
+-- وده هيتغلب تاني أول ما حد يقيّم من التطبيق (شوف src/catalog.js).
+CREATE TABLE IF NOT EXISTS vendor_ratings (
+    vendor_id   VARCHAR(60) NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    rating      SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (vendor_id, customer_id)
+);
+
 CREATE TABLE IF NOT EXISTS products (
     id                VARCHAR(60) PRIMARY KEY,
     vendor_id         VARCHAR(60) NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
