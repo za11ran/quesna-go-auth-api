@@ -18,7 +18,9 @@ const fail = (res, s, code, message) =>
   res.status(s).json({ success: false, error_code: code, message, timestamp: nowIso() });
 const dispatchRole = staffAuth(['dispatcher', 'admin']);
 
-const OFFER_TIMEOUT_SEC = Number(process.env.DELIVERY_OFFER_TIMEOUT_SEC || 60);
+// ٩٠ ثانية بدل ٦٠ — كانت ضيقة قوي مع وقت وصول الـ push + فتح التطبيق فعليًا،
+// كان بيخلي الطلب "يختفي" من عند الدليفري قبل ما يلحق يقبله. قابل للتعديل من .env.
+const OFFER_TIMEOUT_SEC = Number(process.env.DELIVERY_OFFER_TIMEOUT_SEC || 90);
 
 function serializeDriverFull(d) {
   return {
