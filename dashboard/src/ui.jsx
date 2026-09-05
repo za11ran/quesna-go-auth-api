@@ -32,7 +32,7 @@ const STATUS_TONE = {
   pending: 'warn', approved: 'ok', rejected: 'danger', cancelled: '',
   active: 'ok', suspended: 'danger', delivered: 'ok', on_the_way: 'blue',
   ready_for_pickup: 'blue', assigned: 'blue', preparing: 'warn', accepted: 'ok',
-  available: 'ok', busy: 'warn', offline: '',
+  available: 'ok', busy: 'warn', offline: '', price_review: 'warn',
 };
 export const statusTone = (s) => STATUS_TONE[s] || '';
 
@@ -41,6 +41,7 @@ export const statusTone = (s) => STATUS_TONE[s] || '';
 const LABELS = {
   // حالة الطلب
   pending: 'قيد المراجعة', accepted: 'مقبول', preparing: 'قيد التحضير',
+  price_review: 'محتاج موافقة العميل على السعر',
   ready_for_pickup: 'جاهز للاستلام', assigned: 'معيّن', picked_up: 'تم الاستلام',
   on_the_way: 'في الطريق', arrived: 'وصل العميل', delivered: 'تم التسليم',
   rejected: 'مرفوض', cancelled: 'ملغي',

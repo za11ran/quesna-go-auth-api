@@ -51,6 +51,9 @@ export default function DispatchQueue() {
                 {o.vendors.map((v) => v.vendor_name).join('، ')} → {o.customer?.name}<br />
                 {o.address_text} · <Money v={o.total} />
               </p>
+              {!o.is_quick && o.notes && (
+                <p className="err" style={{ margin: '0 0 6px' }}>📝 ملحوظة العميل: {o.notes}</p>
+              )}
               {o.vendors.filter((v) => v.order_mode === 'manual').map((v) => (
                 <p key={v.vendor_id} className="err" style={{ margin: '0 0 6px' }}>
                   📞 اتصل بـ {v.vendor_name}{v.vendor_phone ? ` — ${v.vendor_phone}` : ''} لتأكيد الطلب
@@ -68,7 +71,12 @@ export default function DispatchQueue() {
                   مراجعة وتسعير
                 </button>
               )}
-              {o.is_quick && o.status !== 'pending' && (
+              {o.is_quick && o.status === 'price_review' && (
+                <p className="page-sub" style={{ margin: 0 }}>
+                  بانتظار موافقة العميل على السعر ({o.total} ج.م)…
+                </p>
+              )}
+              {o.is_quick && !['pending', 'price_review'].includes(o.status) && (
                 o.driver
                   ? <div className="row" style={{ justifyContent: 'space-between' }}>
                       <span>الدليفري: <strong>{o.driver.name}</strong> ({o.driver.phone})</span>

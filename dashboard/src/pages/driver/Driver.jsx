@@ -80,7 +80,11 @@ export default function Driver() {
                       <b>الاستلام:</b> {pickup.map((p) => `${p.name} (${p.phone || '—'})`).join('، ')}<br />
                       <b>التسليم:</b> {o.customer?.name} ({o.customer?.phone})<br />
                       {o.address_text} · <Money v={o.total} /> ({label(o.payment_method)})
+                      {o.address?.lat && o.address?.lng && (
+                        <> · <a href={`https://www.google.com/maps/dir/?api=1&destination=${o.address.lat},${o.address.lng}`} target="_blank" rel="noreferrer">فتح في الخرائط</a></>
+                      )}
                     </p>
+                    {!o.is_quick && o.notes && <p className="err" style={{ margin: '0 0 6px' }}>📝 ملحوظة العميل: {o.notes}</p>}
                     <div className="row">
                       {pendingAcceptance && (
                         <>

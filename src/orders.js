@@ -5,6 +5,7 @@
 //   GET    /api/orders/:id/receipt
 //   POST   /api/orders/:id/cancel     (بيشتغل مع الطلب السريع كمان)
 //   POST   /api/orders/quick          (طلب سريع — دلوقتي بيوصل للمشرف فعليًا)
+//   POST   /api/orders/:id/quick-price/respond   {approve}
 //   GET/POST/DELETE /api/addresses[/:id]
 //   GET /api/notifications   ·   POST /api/notifications/:id/read
 //   POST /api/devices
@@ -201,8 +202,12 @@ router.post('/orders', authRequired, async (req, res, next) => {
     const discountTotal = n2(lineDiscountTotal + couponDiscount);
     const total = n2(subtotal + deliveryTotal - couponDiscount);
 
-    // العنوان (id أو نص)
-    let addrId = null, addrText = body.address_text || null, addrLat = null, addrLng = null;
+    // العنوان (id أو نص) — لو العميل حدّد موقع من الخريطة وقت الطلب (بدل عنوان
+    // محفوظ) بيبعت lat/lng مباشرة مع النص، عشان الدليفري يقدر يلاقي المكان
+    // بالظبط، مش بس يقرا نص العنوان.
+    let addrId = null, addrText = body.address_text || null;
+    let addrLat = body.lat != null ? Number(body.lat) : null;
+    let addrLng = body.lng != null ? Number(body.lng) : null;
     if (body.address_id) {
       const ar = await db.query(
         `SELECT * FROM user_addresses WHERE id = $1 AND user_id = $2`,
@@ -402,6 +407,35 @@ router.get('/orders/:id', authRequired, async (req, res, next) => {
     if (!bundle || bundle.order.customer_id !== req.user.sub)
       return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
     res.json(serializeOrder(bundle));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ============================ POST /api/orders/:id/quick-price/respond ============================ */
+// موافقة/رفض العميل على السعر اللي أكّده المشرف للطلب السريع (status
+// 'price_review') — من غيرها المشرف كان يقدر يعيّن دليفري بالسعر اللي هو
+// حدده من غير ما العميل يوافق عليه أصلًا.
+router.post('/orders/:id/quick-price/respond', authRequired, async (req, res, next) => {
+  try {
+    if (!req.params.id.startsWith('qo_')) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+    const qBundle = await loadQuickOrder(req.params.id);
+    if (!qBundle || qBundle.qo.customer_id !== req.user.sub)
+      return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+    if (qBundle.qo.status !== 'price_review')
+      return fail(res, 409, 'NOT_AWAITING_APPROVAL', 'مفيش سعر محتاج موافقتك دلوقتي');
+    const approve = !!(req.body || {}).approve;
+    const updated = await setQuickOrderStatus(req.params.id, approve ? 'accepted' : 'cancelled');
+    emitTo('role:dispatcher', 'dispatch:needs_assignment', { quick_order_id: req.params.id, reason: 'quick_order_price_response' });
+    emitTo('role:admin', 'dispatch:needs_assignment', { quick_order_id: req.params.id, reason: 'quick_order_price_response' });
+    if (updated.qo.dispatcher_id) {
+      notify(updated.qo.dispatcher_id, {
+        title: approve ? 'العميل وافق على السعر' : 'العميل رفض السعر',
+        body: `الطلب ${req.params.id}`,
+        type: 'quick_order_price', orderId: req.params.id, recipientType: 'staff',
+      });
+    }
+    res.json(serializeQuickOrder(updated));
   } catch (err) {
     next(err);
   }

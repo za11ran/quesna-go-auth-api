@@ -204,13 +204,24 @@ router.post('/orders/:id/unassign', dispatchRole, async (req, res, next) => {
 /* -------- الطلب السريع: مراجعة/تسعير/تعيين -------- */
 // مقصود أبسط من التعيين العادي (من غير delivery_offers/مهلة قبول) — المشرف
 // بيراجع التفاصيل، يأكّد سعر حقيقي، وبعدين يدّي الطلب لدليفري مباشرة.
+// المشرف بيراجع ويحدّد سعر حقيقي — ده مش قبول نهائي؛ لازم عندك موافقة العميل
+// الصريحة على السعر ده الأول قبل ما يتعيّنله دليفري (شوف
+// POST /api/orders/:id/quick-price/respond في orders.js). كان قبل كده بيقفز
+// لـ 'accepted' على طول من غير ما العميل ياخد فرصة يوافق أو يرفض السعر.
 router.post('/quick-orders/:id/accept', dispatchRole, async (req, res, next) => {
   try {
     const b = await loadQuickOrder(req.params.id);
     if (!b) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
     if (b.qo.status !== 'pending') return fail(res, 409, 'NOT_PENDING', 'الطلب اتراجع بالفعل');
     const price = (req.body || {}).price != null ? Number(req.body.price) : undefined;
-    const updated = await setQuickOrderStatus(req.params.id, 'accepted', { dispatcherId: req.staff.id, price });
+    if (price == null || price <= 0) return fail(res, 422, 'PRICE_REQUIRED', 'السعر مطلوب');
+    const updated = await setQuickOrderStatus(req.params.id, 'price_review', { dispatcherId: req.staff.id, price });
+    await notify(updated.qo.customer_id, {
+      title: 'سعر طلبك السريع جاهز',
+      body: `سعر طلبك ${req.params.id}: ${price} جنيه — وافق أو ارفض`,
+      type: 'quick_order_price', orderId: req.params.id,
+      data: { qo_status: 'price_review' },
+    });
     res.json(serializeQuickOrder(updated));
   } catch (e) { next(e); }
 });

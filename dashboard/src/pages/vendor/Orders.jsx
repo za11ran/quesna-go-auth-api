@@ -57,9 +57,15 @@ export default function VendorOrders() {
               <p className="page-sub" style={{ margin: '6px 0' }}>
                 {o.customer?.name} · {o.customer?.phone}<br />{o.address_text}
               </p>
+              {o.notes && (
+                <p className="err" style={{ margin: '0 0 6px' }}>📝 ملحوظة العميل: {o.notes}</p>
+              )}
               <ul style={{ margin: '8px 0', paddingInlineStart: 18 }}>
                 {o.items.map((it, i) => (
-                  <li key={i}>{it.name}{it.option_name ? ` — ${it.option_name}` : ''} × {it.quantity} <Money v={it.line_total} /></li>
+                  <li key={i}>
+                    {it.name}{it.option_name ? ` — ${it.option_name}` : ''} × {it.quantity} <Money v={it.line_total} />
+                    {it.note && <div className="page-sub" style={{ margin: '2px 0 0' }}>📝 {it.note}</div>}
+                  </li>
                 ))}
               </ul>
               <div className="row" style={{ justifyContent: 'space-between' }}>
