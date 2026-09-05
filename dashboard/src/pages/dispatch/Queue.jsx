@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { api, apiBase } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, Money, statusTone, label as trLabel, OrderInvoice } from '../../ui';
+import { useAsync, ErrBox, Empty, Pill, Money, statusTone, label as trLabel, OrderInvoice, shortOrderId } from '../../ui';
 import { useLive } from '../../socket';
 
 export default function DispatchQueue() {
@@ -50,7 +50,7 @@ export default function DispatchQueue() {
           {rows.map((o) => (
             <div key={o.id} className="card card-pad">
               <div className="row" style={{ justifyContent: 'space-between' }}>
-                <strong>{o.id}</strong>
+                <strong>{shortOrderId(o.id)}</strong>
                 <Pill tone={statusTone(o.status)}>{trLabel(o.status)}{o.driver_sub_status ? ` · ${trLabel(o.driver_sub_status)}` : ''}</Pill>
               </div>
               <p className="page-sub" style={{ margin: '6px 0' }}>

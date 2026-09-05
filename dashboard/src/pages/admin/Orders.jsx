@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, Money, statusTone, Modal, label } from '../../ui';
+import { useAsync, ErrBox, Empty, Pill, Money, statusTone, Modal, label, shortOrderId } from '../../ui';
 
 const STATUSES = ['', 'pending', 'accepted', 'preparing', 'ready_for_pickup', 'assigned', 'picked_up', 'on_the_way', 'delivered', 'rejected', 'cancelled'];
 
@@ -33,7 +33,7 @@ export default function AdminOrders() {
               : rows.length === 0 ? <tr><td colSpan={7}><Empty /></td></tr>
               : rows.map((o) => (
                 <tr key={o.id}>
-                  <td>{o.id}</td>
+                  <td>{shortOrderId(o.id)}</td>
                   <td><Pill tone={statusTone(o.status)}>{label(o.status)}</Pill></td>
                   <td><Money v={o.total} /></td>
                   <td>{label(o.payment_method)} / {label(o.payment_status)}</td>
@@ -61,7 +61,7 @@ function OrderHistory({ orderId, onClose }) {
   const { data, loading, error } = useAsync(() => api.get(`/api/admin/orders/${orderId}`), [orderId]);
   const history = data?.status_history || [];
   return (
-    <Modal title={`سجل حالة الطلب ${orderId}`} onClose={onClose}>
+    <Modal title={`سجل حالة الطلب ${shortOrderId(orderId)}`} onClose={onClose}>
       <ErrBox error={error} />
       {data && (
         <p className="page-sub" style={{ marginBottom: 12 }}>

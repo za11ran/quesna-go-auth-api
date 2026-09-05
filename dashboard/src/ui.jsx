@@ -15,6 +15,10 @@ export function useAsync(fn, deps = []) {
 
 export const Money = ({ v }) => <span>{Number(v || 0).toLocaleString('ar-EG')} ج.م</span>;
 
+// نفس تنسيق رقم الطلب المعروض للعميل في التطبيق (Go<الرقم>) — بدل الـ id
+// الخام (ord_11/qo_11) اللي مفيش داعي المشرف/الدليفري يشوفوه بالشكل ده.
+export const shortOrderId = (id) => `Go${String(id ?? '').replace(/^(ord_|qo_)/, '')}`;
+
 export function Empty({ children = 'لا توجد بيانات' }) {
   return <div className="empty">{children}</div>;
 }

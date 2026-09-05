@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { api } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, Money, statusTone, label, OrderInvoice } from '../../ui';
+import { api, apiBase } from '../../api';
+import { useAsync, ErrBox, Empty, Pill, Money, statusTone, label, OrderInvoice, shortOrderId } from '../../ui';
 import { useLive } from '../../socket';
 
 const SUB_NEXT = {
@@ -73,7 +73,7 @@ export default function Driver() {
                 return (
                   <div key={o.id} className="card card-pad">
                     <div className="row" style={{ justifyContent: 'space-between' }}>
-                      <strong>{o.id}</strong>
+                      <strong>{shortOrderId(o.id)}</strong>
                       <Pill tone={statusTone(o.status)}>{label(o.status)} · {label(sub)}</Pill>
                     </div>
                     <p className="page-sub" style={{ margin: '6px 0' }}>
@@ -85,6 +85,16 @@ export default function Driver() {
                       )}
                     </p>
                     {!o.is_quick && o.notes && <p className="err" style={{ margin: '0 0 6px' }}>📝 ملحوظة العميل: {o.notes}</p>}
+                    {o.is_quick && o.images?.length > 0 && (
+                      <div className="row" style={{ gap: 6, margin: '0 0 6px' }}>
+                        {o.images.map((img, i) => (
+                          <a key={i} href={apiBase + img} target="_blank" rel="noreferrer">
+                            <img src={apiBase + img} alt="" width={48} height={48}
+                              style={{ borderRadius: 8, objectFit: 'cover', border: '1px solid var(--line)' }} />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     <div style={{ margin: '0 0 8px' }}>
                       <OrderInvoice order={o} />
                     </div>
@@ -111,7 +121,7 @@ export default function Driver() {
                 <table>
                   <thead><tr><th>#</th><th>العميل</th><th>الإجمالي</th><th>الحالة</th></tr></thead>
                   <tbody>{done.map((o) => (
-                    <tr key={o.id}><td>{o.id}</td><td>{o.customer?.name}</td><td><Money v={o.total} /></td><td><Pill tone={statusTone(o.status)}>{label(o.status)}</Pill></td></tr>
+                    <tr key={o.id}><td>{shortOrderId(o.id)}</td><td>{o.customer?.name}</td><td><Money v={o.total} /></td><td><Pill tone={statusTone(o.status)}>{label(o.status)}</Pill></td></tr>
                   ))}</tbody>
                 </table>
               </div>
