@@ -203,6 +203,33 @@ router.post('/settings/feature-flags', adminOnly, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* -------- بيانات التواصل (تظهر في «اتصل بنا» و«عن التطبيق» في التطبيق) -------- */
+router.get('/settings/contact', adminOnly, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`SELECT value FROM app_settings WHERE key = 'contact_info'`);
+    const v = rows[0]?.value || {};
+    res.json({ phone: v.phone || '', whatsapp: v.whatsapp || '', email: v.email || '', address: v.address || '' });
+  } catch (e) { next(e); }
+});
+
+router.post('/settings/contact', adminOnly, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const value = {
+      phone: String(b.phone || '').trim().slice(0, 40),
+      whatsapp: String(b.whatsapp || '').trim().slice(0, 40),
+      email: String(b.email || '').trim().slice(0, 120),
+      address: String(b.address || '').trim().slice(0, 300),
+    };
+    await db.query(
+      `INSERT INTO app_settings (key, value) VALUES ('contact_info', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [JSON.stringify(value)]
+    );
+    res.json(value);
+  } catch (e) { next(e); }
+});
+
 /* -------- القرى: سعر التوصيل الأساسي لكل قرية -------- */
 router.get('/villages', adminOnly, async (req, res, next) => {
   try {

@@ -464,6 +464,24 @@ router.get('/settings/feature-flags', async (req, res, next) => {
   }
 });
 
+/* ---------------- GET /api/settings/contact ---------------- */
+// عام — التطبيق بيقراها في صفحات «اتصل بنا» و«عن التطبيق». الأدمن بيغيّرها
+// من /admin/settings/contact.
+router.get('/settings/contact', async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`SELECT value FROM app_settings WHERE key = 'contact_info'`);
+    const v = rows[0]?.value || {};
+    res.json({
+      phone: v.phone || '',
+      whatsapp: v.whatsapp || '',
+      email: v.email || '',
+      address: v.address || '',
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
 /* ---------------- GET /api/home/categories ---------------- */
 router.get('/home/categories', async (req, res, next) => {
   try {

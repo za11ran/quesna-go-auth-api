@@ -23,6 +23,7 @@ const NAV = {
     { section: 'الإعدادات', items: [
       ['/admin/coupons', 'أكواد الخصم'],
       ['/admin/delivery-pricing', 'أسعار التوصيل'],
+      ['/admin/contact', 'بيانات التواصل'],
     ] },
   ],
   dispatcher: [
