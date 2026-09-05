@@ -97,6 +97,52 @@ export function Field({ label, children }) {
   );
 }
 
+// فاتورة الطلب — قايمة الأصناف + الإجمالي، مطوية افتراضيًا عشان كارت
+// الطلب في طابور التوزيع/صفحة الدليفري يفضل مختصر لحد ما حد يحتاج التفاصيل.
+export function OrderInvoice({ order }) {
+  const [open, setOpen] = useState(false);
+  const items = order.items || [];
+  if (!items.length) return null;
+
+  return (
+    <div>
+      <span className="invoice-toggle" onClick={() => setOpen((o) => !o)}>
+        {open ? '▲ إخفاء الفاتورة' : `▼ عرض الفاتورة (${items.length} صنف)`}
+      </span>
+      {open && (
+        <div className="invoice">
+          {items.map((it, i) => (
+            <div className="invoice-row" key={i}>
+              <div>
+                <div className="name">
+                  {it.name}
+                  {it.option_name && <span className="option"> · {it.option_name}</span>}
+                </div>
+                {it.note && <div className="invoice-note">📝 {it.note}</div>}
+                <div className="qty">× {it.quantity} — <Money v={it.unit_price} /></div>
+              </div>
+              <div><Money v={it.line_total} /></div>
+            </div>
+          ))}
+          <div className="invoice-totals">
+            <div className="t-row"><span>المجموع الفرعي</span><Money v={order.subtotal} /></div>
+            {Number(order.delivery_total) > 0 && (
+              <div className="t-row"><span>مصاريف التوصيل</span><Money v={order.delivery_total} /></div>
+            )}
+            {Number(order.discount_total) > 0 && (
+              <div className="t-row">
+                <span>الخصم{order.coupon_code ? ` (${order.coupon_code})` : ''}</span>
+                <span>-<Money v={order.discount_total} /></span>
+              </div>
+            )}
+            <div className="t-row grand"><span>الإجمالي</span><Money v={order.total} /></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Table({ head, children }) {
   return (
     <div className="card" style={{ overflow: 'auto' }}>

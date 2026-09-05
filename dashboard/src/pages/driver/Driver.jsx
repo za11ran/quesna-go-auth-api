@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { api } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, Money, statusTone, label } from '../../ui';
+import { useAsync, ErrBox, Empty, Pill, Money, statusTone, label, OrderInvoice } from '../../ui';
 import { useLive } from '../../socket';
 
 const SUB_NEXT = {
@@ -85,6 +85,9 @@ export default function Driver() {
                       )}
                     </p>
                     {!o.is_quick && o.notes && <p className="err" style={{ margin: '0 0 6px' }}>📝 ملحوظة العميل: {o.notes}</p>}
+                    <div style={{ margin: '0 0 8px' }}>
+                      <OrderInvoice order={o} />
+                    </div>
                     <div className="row">
                       {pendingAcceptance && (
                         <>

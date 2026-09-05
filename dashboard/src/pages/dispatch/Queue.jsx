@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { api, apiBase } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, Money, statusTone, label as trLabel } from '../../ui';
+import { useAsync, ErrBox, Empty, Pill, Money, statusTone, label as trLabel, OrderInvoice } from '../../ui';
 import { useLive } from '../../socket';
 
 export default function DispatchQueue() {
@@ -85,6 +85,10 @@ export default function DispatchQueue() {
                   🛺 حجز دريفري — المركبة: <strong>{trLabel(o.vehicle_type)}</strong>
                 </p>
               )}
+
+              <div style={{ margin: '0 0 8px' }}>
+                <OrderInvoice order={o} />
+              </div>
 
               {o.is_quick && o.status === 'pending' && (
                 <div className="row">
