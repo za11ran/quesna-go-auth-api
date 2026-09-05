@@ -123,6 +123,7 @@ function serializeProduct(p, options, offers, lang) {
   return {
     id: p.id,
     vendor_id: p.vendor_id,
+    vendor_name: p[`vendor_name_${lang}`] || p.vendor_name_ar || null,
     product_name: p[`name_${lang}`] || p.name_ar,
     brand: p.brand || '',
     description: p[`description_${lang}`] || p.description_ar || '',
@@ -305,8 +306,10 @@ router.get('/favorites', authRequired, async (req, res, next) => {
   try {
     const lang = langOf(req);
     const { rows } = await db.query(
-      `SELECT p.* FROM favorites f
+      `SELECT p.*, v.name_ar AS vendor_name_ar, v.name_en AS vendor_name_en
+         FROM favorites f
          JOIN products p ON p.id = f.product_id
+         JOIN vendors v ON v.id = p.vendor_id
         WHERE f.customer_id = $1 AND p.deleted_at IS NULL
         ORDER BY f.created_at DESC`,
       [req.user.sub]
@@ -378,7 +381,10 @@ router.get('/vendors/:id/products', async (req, res, next) => {
     const totalRes = await db.query(`SELECT count(*)::int AS c FROM products p ${whereSql}`, params);
     params.push(perPage, offset);
     const { rows } = await db.query(
-      `SELECT p.* FROM products p ${whereSql}
+      `SELECT p.*, v.name_ar AS vendor_name_ar, v.name_en AS vendor_name_en
+         FROM products p
+         JOIN vendors v ON v.id = p.vendor_id
+       ${whereSql}
        ORDER BY p.sort_order, p.name_ar
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
@@ -403,7 +409,10 @@ router.get('/vendors/:id/products/:productId', async (req, res, next) => {
   try {
     const lang = langOf(req);
     const { rows } = await db.query(
-      `SELECT * FROM products WHERE id = $1 AND vendor_id = $2 AND deleted_at IS NULL`,
+      `SELECT p.*, v.name_ar AS vendor_name_ar, v.name_en AS vendor_name_en
+         FROM products p
+         JOIN vendors v ON v.id = p.vendor_id
+        WHERE p.id = $1 AND p.vendor_id = $2 AND p.deleted_at IS NULL`,
       [req.params.productId, req.params.id]
     );
     if (!rows.length) {
@@ -503,7 +512,8 @@ router.get('/products/most-requested', async (req, res, next) => {
     const lang = langOf(req);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const { rows } = await db.query(
-      `SELECT p.* FROM products p
+      `SELECT p.*, v.name_ar AS vendor_name_ar, v.name_en AS vendor_name_en
+         FROM products p
        JOIN vendors v ON v.id = p.vendor_id
        WHERE p.is_most_requested = true AND p.deleted_at IS NULL
          AND v.deleted_at IS NULL AND v.is_active = true AND v.status = 'approved'
@@ -545,7 +555,10 @@ router.get('/products/on-offer', async (req, res, next) => {
 
     const ph = vendorIds.map((_, i) => `$${i + 1}`).join(', ');
     const prodRes = await db.query(
-      `SELECT * FROM products WHERE vendor_id IN (${ph}) AND deleted_at IS NULL AND is_available = true`,
+      `SELECT p.*, v.name_ar AS vendor_name_ar, v.name_en AS vendor_name_en
+         FROM products p
+         JOIN vendors v ON v.id = p.vendor_id
+        WHERE p.vendor_id IN (${ph}) AND p.deleted_at IS NULL AND p.is_available = true`,
       vendorIds
     );
 
