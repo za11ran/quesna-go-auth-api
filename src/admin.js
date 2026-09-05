@@ -183,6 +183,26 @@ router.post('/settings/delivery-pricing', adminOnly, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* -------- مفاتيح تفعيل/إخفاء فيتشرات (حاليًا: حقل الكوبون في السلة) -------- */
+router.get('/settings/feature-flags', adminOnly, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`SELECT value FROM app_settings WHERE key = 'feature_flags'`);
+    res.json({ coupon_field_visible: (rows[0]?.value || {}).coupon_field_visible ?? true });
+  } catch (e) { next(e); }
+});
+
+router.post('/settings/feature-flags', adminOnly, async (req, res, next) => {
+  try {
+    const visible = !!(req.body || {}).coupon_field_visible;
+    await db.query(
+      `INSERT INTO app_settings (key, value) VALUES ('feature_flags', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [JSON.stringify({ coupon_field_visible: visible })]
+    );
+    res.json({ coupon_field_visible: visible });
+  } catch (e) { next(e); }
+});
+
 /* -------- القرى: سعر التوصيل الأساسي لكل قرية -------- */
 router.get('/villages', adminOnly, async (req, res, next) => {
   try {

@@ -36,6 +36,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS village_id  INTEGER REFERENCES villag
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url  TEXT;          -- صورة البروفايل (رابط من النت)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date  DATE;          -- تاريخ الميلاد (اختياري)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS gender      VARCHAR(10);   -- 'male' | 'female' (اختياري)
+-- حذف الحساب (DELETE /api/auth/me) — حذف منطقي (مش هارد ديليت) عشان يفضل
+-- تاريخ طلباته سليم؛ الاسم/الإيميل/التليفون بيتم تشويشهم وقتها. وسّعنا عمود
+-- phone عشان يستحمل بادئة "deleted_<uuid>_" ويفضل رقم التليفون الأصلي حر
+-- لتسجيل حساب جديد بيه.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at  TIMESTAMPTZ;
+ALTER TABLE users ALTER COLUMN phone TYPE VARCHAR(80);
 
 -- ---------- جدول أكواد التحقق OTP ----------
 CREATE TABLE IF NOT EXISTS auth_tokens (
@@ -540,7 +546,8 @@ CREATE TABLE IF NOT EXISTS app_settings (
 );
 INSERT INTO app_settings (key, value) VALUES
  ('approval_rules', '{"vendor_fields":["description_ar","description_en"],"product_create":true,"product_update_fields":["name_ar","name_en","category","description_ar","description_en"],"product_delete":true,"product_options":true,"offers":true,"instant":["stock","is_available","is_open","price","working_hours"]}'),
- ('delivery_pricing', '{"extra_vendor_fee": 15}')
+ ('delivery_pricing', '{"extra_vendor_fee": 15}'),
+ ('feature_flags', '{"coupon_field_visible": true}')
 ON CONFLICT (key) DO NOTHING;
 
 -- ---------- حسابات تجريبية ----------
@@ -666,5 +673,10 @@ ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS dispatcher_id     UUID;
 ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS driver_id         VARCHAR(60);
 ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS driver_sub_status VARCHAR(20);
 ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS updated_at        TIMESTAMPTZ NOT NULL DEFAULT now();
+-- عنوان/موقع التسليم — كان الطلب السريع من غيرهم خالص، فمكانش الدليفري
+-- عنده أي فكرة يوصل فين (شوف orders.address_text/address_lat/address_lng).
+ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS address_text      TEXT;
+ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS address_lat       NUMERIC(9,6);
+ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS address_lng       NUMERIC(9,6);
 
 ALTER TABLE categories ADD COLUMN IF NOT EXISTS image TEXT;

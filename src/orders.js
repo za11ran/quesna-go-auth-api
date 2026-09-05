@@ -330,10 +330,13 @@ router.post('/orders/quick', authRequired, imagesUpload, async (req, res, next) 
     const urls = await saveImages(req.files, { folder: 'quick', width: 1200 });
     const seq = await db.query(`SELECT nextval('quick_order_seq') AS n`);
     const id = `qo_${seq.rows[0].n}`;
+    const addressText = b.address_text ? String(b.address_text).trim() : null;
+    const addressLat = b.lat != null ? Number(b.lat) : null;
+    const addressLng = b.lng != null ? Number(b.lng) : null;
     await db.query(
-      `INSERT INTO quick_orders (id, customer_id, details, price, images)
-       VALUES ($1,$2,$3,$4,$5)`,
-      [id, req.user.sub, String(b.details).trim(), b.price != null ? Number(b.price) : null, JSON.stringify(urls)]
+      `INSERT INTO quick_orders (id, customer_id, details, price, images, address_text, address_lat, address_lng)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [id, req.user.sub, String(b.details).trim(), b.price != null ? Number(b.price) : null, JSON.stringify(urls), addressText, addressLat, addressLng]
     );
     await notify(req.user.sub, { title: 'استلمنا طلبك السريع', body: `رقم ${id} — هنتواصل معاك`, type: 'order_placed', orderId: id });
 

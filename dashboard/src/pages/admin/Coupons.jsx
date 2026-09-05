@@ -2,6 +2,36 @@ import { useState } from 'react';
 import { api } from '../../api';
 import { useAsync, ErrBox, Empty, Pill, Modal, Field } from '../../ui';
 
+function CouponFieldToggle() {
+  const { data, loading, error, reload } = useAsync(() => api.get('/api/admin/settings/feature-flags'));
+  const [busy, setBusy] = useState(false);
+  const visible = data?.coupon_field_visible ?? true;
+
+  async function toggle() {
+    setBusy(true);
+    try {
+      await api.post('/api/admin/settings/feature-flags', { coupon_field_visible: !visible });
+      reload();
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="card row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <div>
+        <strong>إظهار حقل الكوبون في السلة</strong>
+        <p className="page-sub" style={{ margin: '2px 0 0' }}>
+          لو مقفول، حقل كتابة كود الخصم مش هيظهر للعميل في السلة نهائيًا — الأكواد نفسها تفضل زي ما هي.
+        </p>
+      </div>
+      <ErrBox error={error} />
+      <label className="row" style={{ gap: 6 }}>
+        <input type="checkbox" checked={visible} disabled={loading || busy} onChange={toggle} />
+        {visible ? 'ظاهر' : 'مخفي'}
+      </label>
+    </div>
+  );
+}
+
 export default function Coupons() {
   const { data, loading, error, reload } = useAsync(() => api.get('/api/admin/coupons'));
   const [edit, setEdit] = useState(null); // coupon or {} for new
@@ -16,6 +46,7 @@ export default function Coupons() {
         </div>
         <button className="btn primary" onClick={() => setEdit({})}>+ كود جديد</button>
       </div>
+      <CouponFieldToggle />
       <ErrBox error={error} />
       <div className="card" style={{ overflow: 'auto' }}>
         <table>

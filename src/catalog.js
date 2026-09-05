@@ -442,6 +442,18 @@ router.get('/vendors/:id/menu-sections', async (req, res, next) => {
   }
 });
 
+/* ---------------- GET /api/settings/feature-flags ---------------- */
+// عام (بدون تسجيل دخول) — التطبيق بيقرأها عشان يقرر مثلًا يورّي حقل الكوبون
+// في السلة ولا لأ (الأدمن بيتحكم فيها من /admin/settings/feature-flags).
+router.get('/settings/feature-flags', async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`SELECT value FROM app_settings WHERE key = 'feature_flags'`);
+    res.json({ coupon_field_visible: (rows[0]?.value || {}).coupon_field_visible ?? true });
+  } catch (e) {
+    next(e);
+  }
+});
+
 /* ---------------- GET /api/home/categories ---------------- */
 router.get('/home/categories', async (req, res, next) => {
   try {

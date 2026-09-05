@@ -217,7 +217,7 @@ router.post('/login', authLimiter, form, async (req, res, next) => {
     const p = normalizeEgyptPhone(req.body && req.body.phone);
     if (!p.ok) return fail(res, 422, 'INVALID_PHONE', p.error);
 
-    const u = await db.query('SELECT id FROM users WHERE phone = $1', [p.e164]);
+    const u = await db.query('SELECT id FROM users WHERE phone = $1 AND deleted_at IS NULL', [p.e164]);
     if (u.rowCount === 0) {
       return fail(res, 404, 'ACCOUNT_NOT_FOUND', 'لا يوجد حساب بهذا الرقم، أنشئ حساب جديد');
     }
@@ -479,6 +479,52 @@ router.patch('/me', authRequired, form, async (req, res, next) => {
 
     const { rows } = await db.query(PROFILE_SELECT, [req.user.sub]);
     res.json({ success: true, user: shapeUser(rows[0]) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ---------------------------------------------------------------------------
+ * تسجيل الخروج               POST /api/auth/logout   (محمي)
+ *    body: { token? } — توكن الجهاز (push) الحالي، لو موجود، عشان الجهاز
+ *    يوقف يستقبل إشعارات للحساب ده بعد الخروج. الـ JWT نفسه بدون حالة —
+ *    التطبيق هو اللي بيمسحه محليًا بعد نجاح الطلب ده.
+ * ------------------------------------------------------------------------- */
+router.post('/logout', authRequired, form, async (req, res, next) => {
+  try {
+    const token = (req.body || {}).token;
+    if (token) {
+      await db.query(`DELETE FROM user_devices WHERE user_id = $1 AND token = $2`, [req.user.sub, String(token)]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ---------------------------------------------------------------------------
+ * حذف الحساب                 DELETE /api/auth/me   (محمي)
+ *    حذف منطقي: الاسم/الإيميل/التليفون بيتشوّشوا (عشان رقم التليفون يبقى
+ *    متاح لتسجيل حساب جديد بيه) وكلمة السر بتتمسح، وبنوقف كل إشعارات
+ *    البوش للجهاز. طلباته القديمة بتفضل زي ما هي (مرتبطة بـ id مش بالاسم).
+ * ------------------------------------------------------------------------- */
+router.delete('/me', authRequired, async (req, res, next) => {
+  try {
+    await db.query(
+      `UPDATE users
+          SET full_name = 'مستخدم محذوف',
+              email = NULL,
+              phone = 'deleted_' || id::text || '_' || phone,
+              password_hash = NULL,
+              avatar_url = NULL,
+              status = 'deleted',
+              deleted_at = now(),
+              updated_at = now()
+        WHERE id = $1`,
+      [req.user.sub]
+    );
+    await db.query(`DELETE FROM user_devices WHERE user_id = $1`, [req.user.sub]);
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }

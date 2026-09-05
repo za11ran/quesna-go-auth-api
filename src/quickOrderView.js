@@ -48,7 +48,10 @@ function serializeQuickOrder({ qo, customer, driver }) {
     payment_method: 'cash',
     payment_status: 'pending',
     notes: qo.details,
-    address_text: null,
+    address_text: qo.address_text || null,
+    address: qo.address_lat != null && qo.address_lng != null
+      ? { text: qo.address_text, lat: Number(qo.address_lat), lng: Number(qo.address_lng) }
+      : null,
     items: [{
       product_id: null, name: qo.details, option_name: null,
       unit_price: price, quantity: 1, line_total: price, note: null,
