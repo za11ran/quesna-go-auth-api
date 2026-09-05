@@ -71,7 +71,38 @@ h1, h2, h3, strong { font-weight: 700; }
 .grid.k2 { grid-template-columns: repeat(2, 1fr); }
 .grid.k3 { grid-template-columns: repeat(3, 1fr); }
 .grid.k4 { grid-template-columns: repeat(4, 1fr); }
-@media (max-width: 900px) { .grid.k3, .grid.k4 { grid-template-columns: repeat(2, 1fr); } .shell { grid-template-columns: 1fr; } .side { flex-direction: row; overflow-x: auto; } }
+@media (max-width: 980px) {
+  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .side {
+    position: sticky; top: 0; z-index: 30;
+    flex-direction: row; flex-wrap: wrap;
+    align-items: center; align-content: flex-start;
+    gap: 8px; padding: 10px 14px;
+    border-inline-end: 0; border-bottom: 1px solid var(--line);
+    box-shadow: var(--shadow-sm);
+  }
+  .side .brand { padding: 0; font-size: 16px; margin-inline-end: auto; }
+  .side .spacer { display: none; }
+  /* شارة الدور = div.navlink مباشرة جوه .side — تختفي على الموبايل */
+  .side > .navlink { display: none; }
+  /* زر «خروج» يفضل في السطر الأول جنب اللوجو */
+  .side > .btn { order: -1; padding: 7px 13px; font-size: 13px; }
+  .nav-section-title { display: none; }
+  /* كل مجموعة روابط = صف كامل يلتف تحت اللوجو */
+  .nav-group {
+    order: 1; flex-basis: 100%;
+    flex-direction: row; flex-wrap: wrap; gap: 6px;
+  }
+  .side .navlink { flex: 0 0 auto; white-space: nowrap; padding: 8px 12px; font-size: 13px; }
+  .main { padding: 16px 14px; }
+  .grid.k2, .grid.k3, .grid.k4 { grid-template-columns: 1fr; }
+  .page-title { font-size: 18px; }
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+}
+@media (max-width: 560px) {
+  .card-pad { padding: 14px 15px; }
+  .row { gap: 6px; }
+}
 
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: start; padding: 13px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
