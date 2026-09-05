@@ -97,7 +97,11 @@ h1, h2, h3, strong { font-weight: 700; }
   .main { padding: 16px 14px; }
   .grid.k2, .grid.k3, .grid.k4 { grid-template-columns: 1fr; }
   .page-title { font-size: 18px; }
-  table { display: block; overflow-x: auto; white-space: nowrap; }
+  /* الجدول يفضل جدول عادي، والكارت اللي حواليه هو اللي يتزحلق أفقيًا —
+     display:block على <table> بيكسّر تخطيط الصفوف. */
+  .card { overflow-x: auto; }
+  table { min-width: 620px; }
+  th, td { white-space: nowrap; padding: 11px 12px; }
 }
 @media (max-width: 560px) {
   .card-pad { padding: 14px 15px; }
