@@ -633,4 +633,21 @@ router.post('/devices', authRequired, async (req, res, next) => {
   }
 });
 
+/* =========================== DELETE /api/devices ==========================
+ * إيقاف إشعارات النظام لهذا الجهاز — بيمسح صف التوكن، فالسيرفر يبطّل يبعتله
+ * FCM. لو مفيش token في الـ body بيمسح كل أجهزة المستخدم. */
+router.delete('/devices', authRequired, async (req, res, next) => {
+  try {
+    const token = (req.body && req.body.token) ? String(req.body.token) : null;
+    if (token) {
+      await db.query(`DELETE FROM user_devices WHERE user_id = $1 AND token = $2`, [req.user.sub, token]);
+    } else {
+      await db.query(`DELETE FROM user_devices WHERE user_id = $1`, [req.user.sub]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
