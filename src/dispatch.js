@@ -89,9 +89,13 @@ router.get('/orders', dispatchRole, async (req, res, next) => {
     const statuses = req.query.status
       ? [String(req.query.status)]
       : ['ready_for_pickup', 'assigned', 'picked_up', 'on_the_way'];
+    // الطلب السريع مالوش 'ready_for_pickup' (مفيش متجر يجهّزه) لكن عنده
+    // 'price_review' (مستني موافقة العميل على السعر) و'accepted' (وافق
+    // العميل، محتاج تعيين دليفري) — كانوا ناقصين هنا فكان الطلب يختفي من
+    // الطابور فور ما يخرج من pending، حتى لو لسه محتاج إجراء من المشرف.
     const quickStatuses = req.query.status
       ? statuses
-      : ['pending', ...statuses];
+      : ['pending', 'price_review', 'accepted', ...statuses];
     const ph = statuses.map((_, i) => `$${i + 1}`).join(', ');
     const qph = quickStatuses.map((_, i) => `$${i + 1}`).join(', ');
     const [ordersRes, quickRes] = await Promise.all([
