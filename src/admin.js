@@ -305,6 +305,15 @@ router.put('/vendors/:id', adminOnly, async (req, res, next) => {
       params.push(k === 'avg_prep_time_minutes' ? num(b[k]) : String(b[k]));
       cols.push(`${k} = $${params.length}`);
     }
+    // الأدمن يقدر يظبط الحد الأدنى للطلب ورسوم التوصيل للمتجر (نفس اللي بيظبطه
+    // صاحب المتجر من لوحته) — عشان يقدر يتحكم فيها لو التاجر مش متاح.
+    for (const k of ['min_order', 'delivery_fee']) {
+      if (b[k] === undefined) continue;
+      const v = num(b[k]);
+      if (v === null || v < 0) return fail(res, 422, 'INVALID_NUMBER', `قيمة ${k} لازم تكون رقم موجب`);
+      params.push(v);
+      cols.push(`${k} = $${params.length}`);
+    }
     // الأدمن يقدر يظبط رقم التقييم يدويًا (مثلًا متجر جديد لسه ملوش تقييمات
     // حقيقية كفاية) — بيغلب أي حساب تلقائي من vendor_ratings لحد ما يتقيّم تاني.
     if (b.rating !== undefined) {
@@ -923,6 +932,24 @@ router.get('/analytics', adminOnly, async (req, res, next) => {
 });
 
 /* ================= أكواد الخصم (Coupons) ================= */
+
+// يطبّع نطاق المتاجر لكوبون من الـ body: vendor_ids (قايمة) أو vendor_id
+// (واحد) أو ولا حاجة. بيتأكد إن كل متجر موجود. بيرجّع:
+//   { vendorIds: string[]|null, vendorId: string|null }  أو  { error, message }
+async function resolveCouponVendors(b) {
+  let ids = [];
+  if (Array.isArray(b.vendor_ids)) ids = b.vendor_ids.map(String).map((s) => s.trim()).filter(Boolean);
+  else if (b.vendor_id) ids = [String(b.vendor_id).trim()].filter(Boolean);
+  ids = [...new Set(ids)];
+  if (!ids.length) return { vendorIds: null, vendorId: null };
+  const { rows } = await db.query(`SELECT id FROM vendors WHERE id = ANY($1)`, [ids]);
+  const found = new Set(rows.map((r) => r.id));
+  const missing = ids.filter((id) => !found.has(id));
+  if (missing.length) return { error: 'VENDOR_NOT_FOUND', message: `متجر غير موجود: ${missing.join(', ')}` };
+  // vendor_id القديم = المتجر الوحيد لو واحد بس، وإلا null (النطاق كله في vendor_ids).
+  return { vendorIds: ids, vendorId: ids.length === 1 ? ids[0] : null };
+}
+
 router.get('/coupons', adminOnly, async (req, res, next) => {
   try {
     const { rows } = await db.query(
@@ -940,15 +967,12 @@ router.post('/coupons', adminOnly, async (req, res, next) => {
     const code = String(b.code || '').trim().toUpperCase();
     if (!code) return fail(res, 422, 'CODE_REQUIRED', 'كود الخصم مطلوب');
     if (num(b.discount_value) === null) return fail(res, 422, 'DISCOUNT_VALUE_REQUIRED', 'قيمة الخصم مطلوبة');
-    const vendorId = b.vendor_id ? String(b.vendor_id) : null;
-    if (vendorId) {
-      const v = await db.query(`SELECT 1 FROM vendors WHERE id = $1`, [vendorId]);
-      if (!v.rowCount) return fail(res, 422, 'VENDOR_NOT_FOUND', 'المتجر غير موجود');
-    }
+    const scope = await resolveCouponVendors(b);
+    if (scope.error) return fail(res, 422, scope.error, scope.message);
     try {
       const { rows } = await db.query(
-        `INSERT INTO coupons (code, discount_type, discount_value, min_order_amount, max_uses, starts_at, ends_at, is_active, vendor_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        `INSERT INTO coupons (code, discount_type, discount_value, min_order_amount, max_uses, starts_at, ends_at, is_active, vendor_id, vendor_ids)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
         [
           code,
           b.discount_type === 'amount' ? 'amount' : 'percent',
@@ -958,7 +982,8 @@ router.post('/coupons', adminOnly, async (req, res, next) => {
           b.starts_at || null,
           b.ends_at || null,
           b.is_active !== false,
-          vendorId,
+          scope.vendorId,
+          scope.vendorIds,
         ]
       );
       res.status(201).json(rows[0]);
@@ -976,18 +1001,18 @@ router.put('/coupons/:id', adminOnly, async (req, res, next) => {
     const b = req.body || {};
     const code = b.code !== undefined && String(b.code).trim() ? String(b.code).trim().toUpperCase() : cur.code;
     let vendorId = cur.vendor_id;
-    if (b.vendor_id !== undefined) {
-      vendorId = b.vendor_id ? String(b.vendor_id) : null;
-      if (vendorId) {
-        const v = await db.query(`SELECT 1 FROM vendors WHERE id = $1`, [vendorId]);
-        if (!v.rowCount) return fail(res, 422, 'VENDOR_NOT_FOUND', 'المتجر غير موجود');
-      }
+    let vendorIds = cur.vendor_ids;
+    if (b.vendor_ids !== undefined || b.vendor_id !== undefined) {
+      const scope = await resolveCouponVendors(b);
+      if (scope.error) return fail(res, 422, scope.error, scope.message);
+      vendorId = scope.vendorId;
+      vendorIds = scope.vendorIds;
     }
     try {
       const { rows } = await db.query(
         `UPDATE coupons SET code=$1, discount_type=$2, discount_value=$3, min_order_amount=$4,
-                            max_uses=$5, starts_at=$6, ends_at=$7, is_active=$8, vendor_id=$9
-          WHERE id = $10 RETURNING *`,
+                            max_uses=$5, starts_at=$6, ends_at=$7, is_active=$8, vendor_id=$9, vendor_ids=$10
+          WHERE id = $11 RETURNING *`,
         [
           code,
           b.discount_type === 'amount' ? 'amount' : (b.discount_type === 'percent' ? 'percent' : cur.discount_type),
@@ -998,6 +1023,7 @@ router.put('/coupons/:id', adminOnly, async (req, res, next) => {
           b.ends_at !== undefined ? (b.ends_at || null) : cur.ends_at,
           b.is_active !== undefined ? b.is_active !== false : cur.is_active,
           vendorId,
+          vendorIds,
           req.params.id,
         ]
       );

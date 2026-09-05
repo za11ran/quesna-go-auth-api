@@ -16,20 +16,40 @@ function CouponFieldToggle() {
   }
 
   return (
-    <div className="card row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+    <div className="card row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 }}>
       <div>
-        <strong>إظهار حقل الكوبون في السلة</strong>
+        <strong>حقل الكوبون في السلة</strong>
         <p className="page-sub" style={{ margin: '2px 0 0' }}>
-          لو مقفول، حقل كتابة كود الخصم مش هيظهر للعميل في السلة نهائيًا — الأكواد نفسها تفضل زي ما هي.
+          {visible
+            ? 'دلوقتي ظاهر — العميل بيقدر يكتب كود الخصم في السلة.'
+            : 'دلوقتي مخفي — حقل كود الخصم مش بيظهر للعميل خالص. الأكواد نفسها تفضل شغّالة.'}
         </p>
+        <ErrBox error={error} />
       </div>
-      <ErrBox error={error} />
-      <label className="row" style={{ gap: 6 }}>
-        <input type="checkbox" checked={visible} disabled={loading || busy} onChange={toggle} />
-        {visible ? 'ظاهر' : 'مخفي'}
-      </label>
+      <button
+        className={`btn ${visible ? 'danger' : 'primary'}`}
+        style={{ whiteSpace: 'nowrap' }}
+        disabled={loading || busy}
+        onClick={toggle}
+      >
+        {busy ? '…' : visible ? 'إخفاء من السلة' : 'إظهار في السلة'}
+      </button>
     </div>
   );
+}
+
+// معرّفات المتاجر اللي الكوبون مقصور عليها (vendor_ids الجديدة، وإلا vendor_id القديم).
+const couponVendorIds = (c) =>
+  (Array.isArray(c.vendor_ids) && c.vendor_ids.length)
+    ? c.vendor_ids
+    : (c.vendor_id ? [c.vendor_id] : []);
+
+function couponScopeLabel(c, vendors) {
+  const ids = couponVendorIds(c);
+  if (!ids.length) return <span className="page-sub">كل المتاجر</span>;
+  const nameOf = (id) => vendors.find((v) => v.id === id)?.name_ar || id;
+  if (ids.length === 1) return nameOf(ids[0]);
+  return `${ids.length} متاجر: ${ids.map(nameOf).join('، ')}`;
 }
 
 export default function Coupons() {
@@ -64,7 +84,7 @@ export default function Coupons() {
               : rows.map((c) => (
                 <tr key={c.id}>
                   <td><code>{c.code}</code></td>
-                  <td>{c.vendor_id ? (c.vendor_name_ar || c.vendor_id) : <span className="page-sub">كل المتاجر</span>}</td>
+                  <td>{couponScopeLabel(c, vendors)}</td>
                   <td>{c.discount_type === 'percent' ? `${Number(c.discount_value)}%` : `${Number(c.discount_value)} ج.م`}</td>
                   <td>{Number(c.min_order_amount) > 0 ? `${Number(c.min_order_amount)} ج.م` : '—'}</td>
                   <td>{c.used_count}{c.max_uses != null ? ` / ${c.max_uses}` : ''}</td>
@@ -95,7 +115,7 @@ function CouponModal({ c, vendors, onClose, onDone }) {
   const isNew = !c.id;
   const [f, setF] = useState({
     code: c.code || '',
-    vendor_id: c.vendor_id || '',
+    vendor_ids: couponVendorIds(c),
     discount_type: c.discount_type || 'percent',
     discount_value: c.discount_value ?? 10,
     min_order_amount: c.min_order_amount ?? 0,
@@ -114,7 +134,7 @@ function CouponModal({ c, vendors, onClose, onDone }) {
       const body = {
         ...f,
         code: f.code.trim().toUpperCase(),
-        vendor_id: f.vendor_id || null,
+        vendor_ids: f.vendor_ids,
         discount_value: Number(f.discount_value),
         min_order_amount: Number(f.min_order_amount) || 0,
         max_uses: f.max_uses === '' ? null : Number(f.max_uses),
@@ -134,13 +154,34 @@ function CouponModal({ c, vendors, onClose, onDone }) {
       <Field label="الكود">
         <input value={f.code} onChange={set('code')} placeholder="WELCOME10" style={{ textTransform: 'uppercase' }} />
       </Field>
-      <Field label="مقصور على متجر (اختياري)">
-        <select value={f.vendor_id} onChange={set('vendor_id')}>
-          <option value="">كل المتاجر</option>
-          {vendors.map((v) => <option key={v.id} value={v.id}>{v.name_ar}</option>)}
-        </select>
+      <Field label="مقصور على متاجر (اختياري)">
+        <div style={{
+          maxHeight: 160, overflow: 'auto', border: '1px solid var(--line)',
+          borderRadius: 'var(--radius-sm)', padding: '8px 10px',
+        }}>
+          {vendors.length === 0 && <span className="page-sub">لا توجد متاجر</span>}
+          {vendors.map((v) => {
+            const on = f.vendor_ids.includes(v.id);
+            return (
+              <label key={v.id} className="row" style={{ gap: 6, padding: '3px 0' }}>
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() => setF({
+                    ...f,
+                    vendor_ids: on
+                      ? f.vendor_ids.filter((id) => id !== v.id)
+                      : [...f.vendor_ids, v.id],
+                  })}
+                />
+                {v.name_ar}
+              </label>
+            );
+          })}
+        </div>
         <p className="page-sub" style={{ margin: '4px 0 0' }}>
-          لو محدّد متجر، الخصم هيتحسب بس على أصناف المتجر ده من السلة، ومش هيشتغل لو المتجر ده مش موجود في الطلب.
+          سيب الكل فاضي = خصم على كل الطلب. لو اخترت متجر أو أكتر، الخصم بيتحسب بس على
+          أصناف المتاجر دي من السلة، ولازم واحد منها على الأقل يكون في الطلب.
         </p>
       </Field>
       <div className="grid k2">

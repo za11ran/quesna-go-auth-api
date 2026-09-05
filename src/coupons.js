@@ -18,17 +18,31 @@ const MESSAGES = {
   COUPON_VENDOR_MISMATCH: 'الكود ده خاص بمتجر تاني مش في طلبك',
 };
 
-// الكود لو مربوط بمتجر معيّن (coupon.vendor_id)، الخصم بيتحسب بس على subtotal
-// بتاع المتجر ده من السلة (مش على كل الطلب)، ولازم المتجر يكون فعلًا موجود في
-// السلة. الكود العام (vendor_id = null) بيفضل يتحسب على subtotal الطلب كله
-// زي ما كان بالظبط.
+// المتاجر اللي الكود مقصور عليها: vendor_ids (قايمة) لها الأولوية، وإلا
+// vendor_id القديم (متجر واحد)، وإلا فاضية = الكود عام على كل الطلب.
+function couponVendorIds(coupon) {
+  if (Array.isArray(coupon.vendor_ids) && coupon.vendor_ids.length) {
+    return coupon.vendor_ids.filter(Boolean).map(String);
+  }
+  return coupon.vendor_id ? [String(coupon.vendor_id)] : [];
+}
+
+// كود عام (مفيش متاجر) → الخصم على subtotal الطلب كله زي ما كان.
+// كود مقصور على متجر/متاجر → الخصم بيتحسب على مجموع subtotal بتاع المتاجر دي
+// من السلة بس، ولازم متجر واحد منها على الأقل يكون موجود في الطلب.
 function subtotalForCoupon(coupon, { subtotal, vendorSubtotals }) {
-  if (!coupon.vendor_id) return { ok: true, subtotal: Number(subtotal) || 0 };
-  const vs = vendorSubtotals && Object.prototype.hasOwnProperty.call(vendorSubtotals, coupon.vendor_id)
-    ? Number(vendorSubtotals[coupon.vendor_id])
-    : null;
-  if (vs == null) return { ok: false };
-  return { ok: true, subtotal: vs };
+  const ids = couponVendorIds(coupon);
+  if (!ids.length) return { ok: true, subtotal: Number(subtotal) || 0 };
+  let sum = 0;
+  let matched = false;
+  for (const id of ids) {
+    if (vendorSubtotals && Object.prototype.hasOwnProperty.call(vendorSubtotals, id)) {
+      sum += Number(vendorSubtotals[id]) || 0;
+      matched = true;
+    }
+  }
+  if (!matched) return { ok: false };
+  return { ok: true, subtotal: sum };
 }
 
 // يدوّر على كود صالح (مفعّل + في الفترة الزمنية + مستخدَم أقل من الحد الأقصى).
@@ -86,6 +100,7 @@ router.post('/coupons/validate', authRequired, async (req, res, next) => {
       discount_value: Number(coupon.discount_value),
       discount_amount: computeDiscount(coupon, scoped.subtotal),
       vendor_id: coupon.vendor_id || null,
+      vendor_ids: couponVendorIds(coupon),
     });
   } catch (e) {
     next(e);
@@ -93,6 +108,6 @@ router.post('/coupons/validate', authRequired, async (req, res, next) => {
 });
 
 module.exports = {
-  router, findValidCoupon, computeDiscount, subtotalForCoupon,
+  router, findValidCoupon, computeDiscount, subtotalForCoupon, couponVendorIds,
   COUPON_MESSAGES: MESSAGES,
 };

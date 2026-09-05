@@ -433,6 +433,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_coupons_code ON coupons ((UPPER(code)));
 -- في السلة أصلًا.
 ALTER TABLE coupons ADD COLUMN IF NOT EXISTS vendor_id VARCHAR(60) REFERENCES vendors(id) ON DELETE CASCADE;
 
+-- كوبون يتقصر على أكتر من متجر: قايمة معرّفات المتاجر. NULL/فاضية = كل الطلب.
+-- لو فيها قيم، الخصم بيتحسب على مجموع subtotal بتاع المتاجر دي من السلة بس،
+-- ولازم متجر واحد منها على الأقل يكون موجود في الطلب. (vendor_id القديم لسه
+-- شغّال كاختيار متجر واحد.)
+ALTER TABLE coupons ADD COLUMN IF NOT EXISTS vendor_ids TEXT[];
+
 CREATE TABLE IF NOT EXISTS order_vendors (
     order_id     VARCHAR(30) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     vendor_id    VARCHAR(60) NOT NULL,

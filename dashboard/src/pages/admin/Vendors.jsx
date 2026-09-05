@@ -163,6 +163,7 @@ function EditVendor({ vendor, onClose, onDone }) {
     description_ar: vendor.description_ar || '', description_en: vendor.description_en || '',
     phone: vendor.phone || '',
     rating: vendor.rating ?? 0, reviews_count: vendor.reviews_count ?? 0,
+    min_order: vendor.min_order ?? 0, delivery_fee: vendor.delivery_fee ?? 0,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -216,6 +217,18 @@ function EditVendor({ vendor, onClose, onDone }) {
       <Field label="الوصف (عربي)"><input value={f.description_ar} onChange={set('description_ar')} /></Field>
       <Field label="الوصف (إنجليزي)"><input value={f.description_en} onChange={set('description_en')} /></Field>
       <Field label="تليفون"><input value={f.phone} onChange={set('phone')} /></Field>
+
+      <div className="grid k2">
+        <Field label="الحد الأدنى للطلب (ج.م)">
+          <input type="number" min="0" step="1" value={f.min_order} onChange={set('min_order')} />
+        </Field>
+        <Field label="رسوم التوصيل (ج.م)">
+          <input type="number" min="0" step="1" value={f.delivery_fee} onChange={set('delivery_fee')} />
+        </Field>
+      </div>
+      <p className="page-sub" style={{ margin: '-4px 0 10px' }}>
+        نفس القيم اللي بيتحكم فيها صاحب المتجر من لوحته — العميل بيشوف رسالة «لم تصل للحد الأدنى للطلب» لحد ما يوصل للرقم ده.
+      </p>
 
       <div className="grid k2">
         <Field label="التقييم (من 0 لـ 5)">
