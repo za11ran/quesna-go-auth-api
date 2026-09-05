@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { api } from '../../api';
+import { api, apiBase } from '../../api';
 import { useAsync, ErrBox, Empty, Pill, Money, statusTone, label as trLabel } from '../../ui';
 import { useLive } from '../../socket';
 
@@ -68,8 +68,17 @@ export default function DispatchQueue() {
               {o.is_quick && (
                 <p className="page-sub" style={{ margin: '0 0 6px' }}>
                   📞 اتصل بالعميل ({o.customer?.phone || '—'}) لتأكيد التفاصيل والسعر
-                  {o.images?.length > 0 && ` — مرفق ${o.images.length} صورة`}
                 </p>
+              )}
+              {o.is_quick && o.images?.length > 0 && (
+                <div className="row" style={{ gap: 6, margin: '0 0 6px' }}>
+                  {o.images.map((img, i) => (
+                    <a key={i} href={apiBase + img} target="_blank" rel="noreferrer">
+                      <img src={apiBase + img} alt="" width={48} height={48}
+                        style={{ borderRadius: 8, objectFit: 'cover', border: '1px solid var(--line)' }} />
+                    </a>
+                  ))}
+                </div>
               )}
               {o.is_quick && o.vehicle_type && (
                 <p className="page-sub" style={{ margin: '0 0 6px' }}>
