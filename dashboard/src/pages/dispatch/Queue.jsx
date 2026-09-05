@@ -50,7 +50,7 @@ export default function DispatchQueue() {
           {rows.map((o) => (
             <div key={o.id} className="card card-pad">
               <div className="row" style={{ justifyContent: 'space-between' }}>
-                <strong>{shortOrderId(o.id)}</strong>
+                <strong>{shortOrderId(o)}</strong>
                 <Pill tone={statusTone(o.status)}>{trLabel(o.status)}{o.driver_sub_status ? ` · ${trLabel(o.driver_sub_status)}` : ''}</Pill>
               </div>
               <p className="page-sub" style={{ margin: '6px 0' }}>

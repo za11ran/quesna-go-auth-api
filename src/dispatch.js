@@ -16,6 +16,7 @@ const { loadQuickOrder, serializeQuickOrder, setQuickOrderStatus } = require('./
 const { notify } = require('./notify');
 const { emitTo } = require('./realtime');
 const { sendDriverPush } = require('./push');
+const { orderCode } = require('./orderCode');
 
 const nowIso = () => new Date().toISOString();
 const fail = (res, s, code, message) =>
@@ -67,7 +68,7 @@ async function assignToDriver(orderId, driver, dispatcherId, { reassign = false 
   );
   if (driver.staff_user_id) {
     await notify(driver.staff_user_id, {
-      title: 'تعيين توصيل جديد', body: `طلب ${orderId}`, type: 'order_assigned', orderId, recipientType: 'staff',
+      title: 'تعيين توصيل جديد', body: `طلب ${orderCode(orderId)}`, type: 'order_assigned', orderId, recipientType: 'staff',
     });
   }
   emitTo(`driver:${driver.id}`, 'driver:assignment', { order_id: orderId });
@@ -75,7 +76,7 @@ async function assignToDriver(orderId, driver, dispatcherId, { reassign = false 
   // (staff_users مالهاش user_devices)، فاحتجنا مسار منفصل هنا.
   sendDriverPush(driver.id, {
     title: 'تعيين توصيل جديد',
-    body: `طلب ${orderId} جاهز — روح استلمه`,
+    body: `طلب ${orderCode(orderId)} جاهز — روح استلمه`,
     data: { type: 'order_assigned', order_id: orderId },
   });
 }
@@ -222,7 +223,7 @@ router.post('/quick-orders/:id/accept', dispatchRole, async (req, res, next) => 
     const updated = await setQuickOrderStatus(req.params.id, 'price_review', { dispatcherId: req.staff.id, price });
     await notify(updated.qo.customer_id, {
       title: 'سعر طلبك السريع جاهز',
-      body: `سعر طلبك ${req.params.id}: ${price} جنيه — وافق أو ارفض`,
+      body: `سعر طلبك ${orderCode(req.params.id, b.qo.vehicle_type)}: ${price} جنيه — وافق أو ارفض`,
       type: 'quick_order_price', orderId: req.params.id,
       data: { qo_status: 'price_review' },
     });
@@ -251,13 +252,13 @@ router.post('/quick-orders/:id/assign', dispatchRole, async (req, res, next) => 
     });
     if (d.staff_user_id) {
       notify(d.staff_user_id, {
-        title: 'تعيين طلب سريع جديد', body: `طلب ${req.params.id}`, type: 'order_assigned',
+        title: 'تعيين طلب سريع جديد', body: `طلب ${orderCode(req.params.id, b.qo.vehicle_type)}`, type: 'order_assigned',
         orderId: req.params.id, recipientType: 'staff',
       });
     }
     emitTo(`driver:${d.id}`, 'driver:assignment', { order_id: req.params.id });
     sendDriverPush(d.id, {
-      title: 'تعيين طلب سريع جديد', body: `طلب ${req.params.id} جاهز — روح استلمه`,
+      title: 'تعيين طلب سريع جديد', body: `طلب ${orderCode(req.params.id, b.qo.vehicle_type)} جاهز — روح استلمه`,
       data: { type: 'order_assigned', order_id: req.params.id },
     });
     res.json(serializeQuickOrder(updated));
@@ -288,7 +289,9 @@ router.post('/quick-orders/:id/cancel', dispatchRole, async (req, res, next) => 
     });
     await notify(updated.qo.customer_id, {
       title: 'تم رفض طلبك',
-      body: reason ? `طلب ${req.params.id}: ${reason}` : `طلب ${req.params.id} اتلغى`,
+      body: reason
+        ? `طلب ${orderCode(req.params.id, b.qo.vehicle_type)}: ${reason}`
+        : `طلب ${orderCode(req.params.id, b.qo.vehicle_type)} اتلغى`,
       type: 'quick_order_cancelled', orderId: req.params.id,
     });
     res.json(serializeQuickOrder(updated));

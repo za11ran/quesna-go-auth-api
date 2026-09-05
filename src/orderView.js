@@ -1,6 +1,7 @@
 // تحميل وتسلسل الطلب — مشترك بين العميل/التاجر/المشرف/الدليفري.
 const db = require('./db');
 const { emitTo } = require('./realtime');
+const { orderCode } = require('./orderCode');
 
 const n2 = (v) => (v === null || v === undefined ? v : Math.round(Number(v) * 100) / 100);
 
@@ -43,6 +44,7 @@ function serializeOrder(bundle) {
   const { order: o, items, vendors, history, customer, driver } = bundle;
   return {
     id: o.id,
+    order_code: orderCode(o.id),
     status: o.status,
     driver_sub_status: o.driver_sub_status || null,
     created_at: o.placed_at,

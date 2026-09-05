@@ -73,7 +73,7 @@ export default function Driver() {
                 return (
                   <div key={o.id} className="card card-pad">
                     <div className="row" style={{ justifyContent: 'space-between' }}>
-                      <strong>{shortOrderId(o.id)}</strong>
+                      <strong>{shortOrderId(o)}</strong>
                       <Pill tone={statusTone(o.status)}>{label(o.status)} · {label(sub)}</Pill>
                     </div>
                     <p className="page-sub" style={{ margin: '6px 0' }}>
@@ -123,7 +123,7 @@ export default function Driver() {
                 <table>
                   <thead><tr><th>#</th><th>العميل</th><th>الإجمالي</th><th>الحالة</th></tr></thead>
                   <tbody>{done.map((o) => (
-                    <tr key={o.id}><td>{shortOrderId(o.id)}</td><td>{o.customer?.name}</td><td><Money v={o.total} /></td><td><Pill tone={statusTone(o.status)}>{label(o.status)}</Pill></td></tr>
+                    <tr key={o.id}><td>{shortOrderId(o)}</td><td>{o.customer?.name}</td><td><Money v={o.total} /></td><td><Pill tone={statusTone(o.status)}>{label(o.status)}</Pill></td></tr>
                   ))}</tbody>
                 </table>
               </div>

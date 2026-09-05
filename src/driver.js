@@ -13,6 +13,7 @@ const { signStaffToken, staffAuth } = require('./staff-auth');
 const { loadOrder, serializeOrder, setStatus } = require('./orderView');
 const { loadQuickOrder, serializeQuickOrder, setQuickOrderStatus, QO_SUB_FLOW } = require('./quickOrderView');
 const { notify } = require('./notify');
+const { orderCode } = require('./orderCode');
 
 const nowIso = () => new Date().toISOString();
 const fail = (res, s, code, message) =>
@@ -275,7 +276,10 @@ router.patch('/orders/:id/status', driverRole, async (req, res, next) => {
       }
       await notify(updated.qo.customer_id, {
         title: { ar: 'تحديث طلبك السريع', en: 'Quick order update' },
-        body: { ar: `طلبك ${req.params.id} — ${to}`, en: `Order ${req.params.id} — ${to}` },
+        body: {
+          ar: `طلبك ${orderCode(req.params.id, qb.qo.vehicle_type)} — ${to}`,
+          en: `Order ${orderCode(req.params.id, qb.qo.vehicle_type)} — ${to}`,
+        },
         type: 'order_on_the_way', orderId: req.params.id,
       });
       const out = serializeQuickOrder(updated);
@@ -323,8 +327,8 @@ router.patch('/orders/:id/status', driverRole, async (req, res, next) => {
       await notify(b.order.customer_id, {
         title: { ar: 'تم توصيل طلبك', en: 'Your order was delivered' },
         body: {
-          ar: `طلبك رقم ${req.params.id} وصل. شكرًا لاستخدامك Quesna Go!`,
-          en: `Order ${req.params.id} has arrived. Thanks for using Quesna Go!`,
+          ar: `طلبك رقم ${orderCode(req.params.id)} وصل. شكرًا لاستخدامك Quesna Go!`,
+          en: `Order ${orderCode(req.params.id)} has arrived. Thanks for using Quesna Go!`,
         },
         type: 'order_delivered', orderId: req.params.id,
         data: { receipt_url: `/api/orders/${req.params.id}/receipt` },

@@ -33,7 +33,7 @@ export default function AdminOrders() {
               : rows.length === 0 ? <tr><td colSpan={7}><Empty /></td></tr>
               : rows.map((o) => (
                 <tr key={o.id}>
-                  <td>{shortOrderId(o.id)}</td>
+                  <td>{shortOrderId(o)}</td>
                   <td><Pill tone={statusTone(o.status)}>{label(o.status)}</Pill></td>
                   <td><Money v={o.total} /></td>
                   <td>{label(o.payment_method)} / {label(o.payment_status)}</td>

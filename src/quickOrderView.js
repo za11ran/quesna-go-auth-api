@@ -11,6 +11,7 @@
 const db = require('./db');
 const { emitTo } = require('./realtime');
 const { serializeDriver } = require('./orderView');
+const { orderCode } = require('./orderCode');
 
 // driver_sub_status بعد التعيين مباشرة = 'picked_up' (مفيش "متجر" نروحله زي
 // الطلب العادي — الدليفري بيستلم المهمة على طول)، وبعدين نفس تسلسل الطلب
@@ -33,6 +34,7 @@ function serializeQuickOrder({ qo, customer, driver }) {
   const label = qo.details.length > 60 ? `${qo.details.slice(0, 60)}…` : qo.details;
   return {
     id: qo.id,
+    order_code: orderCode(qo.id, qo.vehicle_type || null),
     is_quick: true,
     status: qo.status,
     driver_sub_status: qo.driver_sub_status || null,

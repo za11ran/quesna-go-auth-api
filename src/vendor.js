@@ -13,6 +13,7 @@ const { signStaffToken, staffAuth } = require('./staff-auth');
 const { submitChangeRequest, vendorFieldsNeedApproval, productFieldsNeedApproval, hasFullPermissions } = require('./changeRequests');
 const { loadOrder, serializeOrder, setStatus } = require('./orderView');
 const { notify } = require('./notify');
+const { orderCode } = require('./orderCode');
 const { emitTo } = require('./realtime');
 const { imageUpload, saveImage } = require('./upload');
 
@@ -676,8 +677,8 @@ router.patch('/orders/:id/status', vendorRole, async (req, res, next) => {
       await notify(bundle.order.customer_id, {
         title: { ar: 'تم قبول طلبك', en: 'Your order was accepted' },
         body: {
-          ar: `طلبك رقم ${req.params.id} قيد التحضير`,
-          en: `Order ${req.params.id} is being prepared`,
+          ar: `طلبك رقم ${orderCode(req.params.id)} قيد التحضير`,
+          en: `Order ${orderCode(req.params.id)} is being prepared`,
         },
         type: 'order_accepted', orderId: req.params.id,
       });

@@ -17,7 +17,20 @@ export const Money = ({ v }) => <span>{Number(v || 0).toLocaleString('ar-EG')} �
 
 // نفس تنسيق رقم الطلب المعروض للعميل في التطبيق (Go<الرقم>) — بدل الـ id
 // الخام (ord_11/qo_11) اللي مفيش داعي المشرف/الدليفري يشوفوه بالشكل ده.
-export const shortOrderId = (id) => `Go${String(id ?? '').replace(/^(ord_|qo_)/, '')}`;
+// كود الطلب الموحّد: ord_ → GQ، qo_ سريع → GO، qo_ بمركبة → Driver.
+// بياخد سطر الطلب كله (فيه order_code من السيرفر) أو الـ id كنص.
+export const shortOrderId = (o) => {
+  if (o && typeof o === 'object') {
+    if (o.order_code) return o.order_code;
+    const s = String(o.id ?? '');
+    if (s.startsWith('qo_')) return `${o.vehicle_type ? 'Driver' : 'GO'}${s.slice(3)}`;
+    return shortOrderId(s);
+  }
+  const s = String(o ?? '');
+  if (s.startsWith('qo_')) return `GO${s.slice(3)}`;
+  if (s.startsWith('ord_')) return `GQ${s.slice(4)}`;
+  return s;
+};
 
 export function Empty({ children = 'لا توجد بيانات' }) {
   return <div className="empty">{children}</div>;
