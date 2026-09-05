@@ -1,9 +1,10 @@
 // Customer orders + addresses + notifications + devices  (BACKEND_HANDOFF.md §7, §10.7-10.9)
 //   POST   /api/orders
-//   GET    /api/orders
-//   GET    /api/orders/:id
+//   GET    /api/orders                (بيرجع orders + quick_orders مع بعض)
+//   GET    /api/orders/:id            (id بيبدأ بـ qo_ = طلب سريع، شوف quickOrderView.js)
 //   GET    /api/orders/:id/receipt
-//   POST   /api/orders/:id/cancel
+//   POST   /api/orders/:id/cancel     (بيشتغل مع الطلب السريع كمان)
+//   POST   /api/orders/quick          (طلب سريع — دلوقتي بيوصل للمشرف فعليًا)
 //   GET/POST/DELETE /api/addresses[/:id]
 //   GET /api/notifications   ·   POST /api/notifications/:id/read
 //   POST /api/devices
@@ -13,6 +14,7 @@ const { authRequired } = require('./auth');
 const { notify } = require('./notify');
 const { emitTo } = require('./realtime');
 const { loadOrder, serializeOrder, n2 } = require('./orderView');
+const { loadQuickOrder, serializeQuickOrder, setQuickOrderStatus } = require('./quickOrderView');
 const { imagesUpload, saveImages } = require('./upload');
 const {
   findValidCoupon,
@@ -329,6 +331,22 @@ router.post('/orders/quick', authRequired, imagesUpload, async (req, res, next) 
       [id, req.user.sub, String(b.details).trim(), b.price != null ? Number(b.price) : null, JSON.stringify(urls)]
     );
     await notify(req.user.sub, { title: 'استلمنا طلبك السريع', body: `رقم ${id} — هنتواصل معاك`, type: 'order_placed', orderId: id });
+
+    // كان الطلب السريع بيتسجّل ويسيبوه من غير ما حد من المشرفين يعرف بيه خالص.
+    // بلّغهم دلوقتي زي بالظبط أي طلب عادي بيبقى جاهز للتوزيع: بث لحظي للوحة
+    // التوزيع (نفس الحدث اللي بيسمعه الطابور) + إشعار فعلي لكل مشرف/أدمن.
+    emitTo('role:dispatcher', 'dispatch:needs_assignment', { quick_order_id: id, reason: 'quick_order' });
+    emitTo('role:admin', 'dispatch:needs_assignment', { quick_order_id: id, reason: 'quick_order' });
+    try {
+      const staff = await db.query(`SELECT id FROM staff_users WHERE role IN ('dispatcher','admin') AND is_active = true`);
+      for (const s of staff.rows) {
+        notify(s.id, {
+          title: 'طلب سريع جديد', body: `طلب ${id} محتاج مراجعة وتسعير`,
+          type: 'quick_order_new', orderId: id, recipientType: 'staff',
+        });
+      }
+    } catch (e) { console.error('[quick-order] فشل تبليغ المشرفين:', e.message); }
+
     res.status(201).json({ success: true, id, images: urls });
   } catch (e) {
     next(e);
@@ -336,17 +354,32 @@ router.post('/orders/quick', authRequired, imagesUpload, async (req, res, next) 
 });
 
 /* ============================ GET /api/orders ============================ */
+// بيرجع طلبات العميل العادية + الطلبات السريعة مع بعض (مرتّبين بتاريخ الطلب)
+// عشان "طلباتي" تعرض كل حاجة الطلبها، مش الطلبات العادية بس.
 router.get('/orders', authRequired, async (req, res, next) => {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const perPage = Math.min(50, Math.max(1, parseInt(req.query.per_page, 10) || 20));
-    const totalRes = await db.query(`SELECT count(*)::int AS c FROM orders WHERE customer_id = $1`, [req.user.sub]);
+    const totalRes = await db.query(
+      `SELECT ((SELECT count(*) FROM orders WHERE customer_id = $1)
+              + (SELECT count(*) FROM quick_orders WHERE customer_id = $1))::int AS c`,
+      [req.user.sub]
+    );
     const { rows } = await db.query(
-      `SELECT id FROM orders WHERE customer_id = $1 ORDER BY placed_at DESC LIMIT $2 OFFSET $3`,
+      `SELECT id, is_quick FROM (
+         SELECT id, placed_at AS at, false AS is_quick FROM orders WHERE customer_id = $1
+         UNION ALL
+         SELECT id, created_at AS at, true AS is_quick FROM quick_orders WHERE customer_id = $1
+       ) combined
+       ORDER BY at DESC LIMIT $2 OFFSET $3`,
       [req.user.sub, perPage, (page - 1) * perPage]
     );
     const data = [];
-    for (const r of rows) data.push(serializeOrder(await loadOrder(r.id)));
+    for (const r of rows) {
+      data.push(r.is_quick
+        ? serializeQuickOrder(await loadQuickOrder(r.id))
+        : serializeOrder(await loadOrder(r.id)));
+    }
     res.json({
       data,
       meta: { page, per_page: perPage, total: totalRes.rows[0].c, last_page: Math.max(1, Math.ceil(totalRes.rows[0].c / perPage)) },
@@ -359,6 +392,12 @@ router.get('/orders', authRequired, async (req, res, next) => {
 /* ============================ GET /api/orders/:id ============================ */
 router.get('/orders/:id', authRequired, async (req, res, next) => {
   try {
+    if (req.params.id.startsWith('qo_')) {
+      const qBundle = await loadQuickOrder(req.params.id);
+      if (!qBundle || qBundle.qo.customer_id !== req.user.sub)
+        return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+      return res.json(serializeQuickOrder(qBundle));
+    }
     const bundle = await loadOrder(req.params.id);
     if (!bundle || bundle.order.customer_id !== req.user.sub)
       return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
@@ -407,6 +446,17 @@ router.get('/orders/:id/receipt', authRequired, async (req, res, next) => {
 router.post('/orders/:id/cancel', authRequired, async (req, res, next) => {
   try {
     const lang = langOf(req);
+    if (req.params.id.startsWith('qo_')) {
+      const qBundle = await loadQuickOrder(req.params.id);
+      if (!qBundle || qBundle.qo.customer_id !== req.user.sub)
+        return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+      if (qBundle.qo.status !== 'pending')
+        return fail(res, 409, 'CANNOT_CANCEL', 'لا يمكن الإلغاء بعد ما المشرف يبدأ مراجعة الطلب');
+      const updated = await setQuickOrderStatus(req.params.id, 'cancelled');
+      const m = msg('order_cancelled', lang, req.params.id);
+      await notify(req.user.sub, { ...m, type: 'order_cancelled', orderId: req.params.id });
+      return res.json(serializeQuickOrder(updated));
+    }
     const bundle = await loadOrder(req.params.id);
     if (!bundle || bundle.order.customer_id !== req.user.sub)
       return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');

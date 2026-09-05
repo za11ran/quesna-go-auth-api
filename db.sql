@@ -624,4 +624,13 @@ CREATE TABLE IF NOT EXISTS quick_orders (
 CREATE INDEX IF NOT EXISTS idx_quick_orders_customer ON quick_orders(customer_id, created_at DESC);
 CREATE SEQUENCE IF NOT EXISTS quick_order_seq START 1;
 
+-- الطلب السريع كان بيتسجّل ويسيبوه كده — مفيش مشرف بيتبلّغ ومفيش تتبّع للعميل.
+-- الأعمدة دي بتخلّيه يتابع نفس دورة حياة الطلب العادي (pending/accepted/
+-- assigned/picked_up/on_the_way/delivered/cancelled) عشان يظهر في نفس طابور
+-- التوزيع وشاشة تتبّع الطلب بالظبط زي أي طلب تاني (src/quickOrderView.js).
+ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS dispatcher_id     UUID;
+ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS driver_id         VARCHAR(60);
+ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS driver_sub_status VARCHAR(20);
+ALTER TABLE quick_orders ADD COLUMN IF NOT EXISTS updated_at        TIMESTAMPTZ NOT NULL DEFAULT now();
+
 ALTER TABLE categories ADD COLUMN IF NOT EXISTS image TEXT;

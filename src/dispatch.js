@@ -5,10 +5,14 @@
 //   POST /dispatch/orders/:id/auto-assign
 //   POST /dispatch/orders/:id/reassign      {driver_id, reason}
 //   POST /dispatch/orders/:id/unassign
+//   POST /dispatch/quick-orders/:id/accept    {price?}
+//   POST /dispatch/quick-orders/:id/assign    {driver_id}
+//   POST /dispatch/quick-orders/:id/unassign   POST /dispatch/quick-orders/:id/cancel
 const router = require('express').Router();
 const db = require('./db');
 const { staffAuth } = require('./staff-auth');
 const { loadOrder, serializeOrder, setStatus } = require('./orderView');
+const { loadQuickOrder, serializeQuickOrder, setQuickOrderStatus } = require('./quickOrderView');
 const { notify } = require('./notify');
 const { emitTo } = require('./realtime');
 const { sendDriverPush } = require('./push');
@@ -77,24 +81,44 @@ async function assignToDriver(orderId, driver, dispatcherId, { reassign = false 
 }
 
 /* -------- orders queue -------- */
+// بيدمج الطلبات العادية مع الطلبات السريعة (pending اللي لسه محدّش راجعها +
+// اللي تحت التنفيذ) في نفس الطابور — عشان طلب سريع جديد يظهر للمشرف زي
+// بالظبط أي طلب تاني محتاج تعيين، مش يضيع في جدول محدّش بيفتحه.
 router.get('/orders', dispatchRole, async (req, res, next) => {
   try {
     const statuses = req.query.status
       ? [String(req.query.status)]
       : ['ready_for_pickup', 'assigned', 'picked_up', 'on_the_way'];
+    const quickStatuses = req.query.status
+      ? statuses
+      : ['pending', ...statuses];
     const ph = statuses.map((_, i) => `$${i + 1}`).join(', ');
-    const { rows } = await db.query(
-      `SELECT id FROM orders WHERE status IN (${ph}) ORDER BY placed_at ASC`,
-      statuses
-    );
+    const qph = quickStatuses.map((_, i) => `$${i + 1}`).join(', ');
+    const [ordersRes, quickRes] = await Promise.all([
+      db.query(`SELECT id, placed_at AS at FROM orders WHERE status IN (${ph}) ORDER BY placed_at ASC`, statuses),
+      db.query(`SELECT id, created_at AS at FROM quick_orders WHERE status IN (${qph}) ORDER BY created_at ASC`, quickStatuses),
+    ]);
+    const combined = [
+      ...ordersRes.rows.map((r) => ({ id: r.id, at: r.at, is_quick: false })),
+      ...quickRes.rows.map((r) => ({ id: r.id, at: r.at, is_quick: true })),
+    ].sort((a, b) => new Date(a.at) - new Date(b.at));
     const data = [];
-    for (const r of rows) data.push(serializeOrder(await loadOrder(r.id)));
+    for (const r of combined) {
+      data.push(r.is_quick
+        ? serializeQuickOrder(await loadQuickOrder(r.id))
+        : serializeOrder(await loadOrder(r.id)));
+    }
     res.json({ data });
   } catch (e) { next(e); }
 });
 
 router.get('/orders/:id', dispatchRole, async (req, res, next) => {
   try {
+    if (req.params.id.startsWith('qo_')) {
+      const qb = await loadQuickOrder(req.params.id);
+      if (!qb) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+      return res.json(serializeQuickOrder(qb));
+    }
     const b = await loadOrder(req.params.id);
     if (!b) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
     res.json(serializeOrder(b));
@@ -174,6 +198,77 @@ router.post('/orders/:id/unassign', dispatchRole, async (req, res, next) => {
     await db.query(`UPDATE orders SET driver_id = NULL, driver_sub_status = NULL WHERE id = $1`, [req.params.id]);
     await setStatus(req.params.id, 'ready_for_pickup', 'dispatcher(unassign)');
     res.json(serializeOrder(await loadOrder(req.params.id)));
+  } catch (e) { next(e); }
+});
+
+/* -------- الطلب السريع: مراجعة/تسعير/تعيين -------- */
+// مقصود أبسط من التعيين العادي (من غير delivery_offers/مهلة قبول) — المشرف
+// بيراجع التفاصيل، يأكّد سعر حقيقي، وبعدين يدّي الطلب لدليفري مباشرة.
+router.post('/quick-orders/:id/accept', dispatchRole, async (req, res, next) => {
+  try {
+    const b = await loadQuickOrder(req.params.id);
+    if (!b) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+    if (b.qo.status !== 'pending') return fail(res, 409, 'NOT_PENDING', 'الطلب اتراجع بالفعل');
+    const price = (req.body || {}).price != null ? Number(req.body.price) : undefined;
+    const updated = await setQuickOrderStatus(req.params.id, 'accepted', { dispatcherId: req.staff.id, price });
+    res.json(serializeQuickOrder(updated));
+  } catch (e) { next(e); }
+});
+
+router.post('/quick-orders/:id/assign', dispatchRole, async (req, res, next) => {
+  try {
+    const b = await loadQuickOrder(req.params.id);
+    if (!b) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+    if (!['accepted', 'assigned'].includes(b.qo.status)) return fail(res, 409, 'NOT_READY', 'لازم تراجع الطلب وتأكّد السعر الأول');
+    const driverId = String((req.body || {}).driver_id || '');
+    const d = (await db.query(`SELECT * FROM drivers WHERE id = $1`, [driverId])).rows[0];
+    if (!d) return fail(res, 422, 'DRIVER_NOT_FOUND', 'الدليفري غير موجود');
+    if (d.status !== 'available' || !d.is_online) return fail(res, 409, 'DRIVER_UNAVAILABLE', 'الدليفري غير متاح');
+    if (b.qo.driver_id && b.qo.driver_id !== d.id) {
+      await db.query(`UPDATE drivers SET status = 'available', current_order_id = NULL, updated_at = now() WHERE id = $1`, [b.qo.driver_id]);
+    }
+    await db.query(
+      `UPDATE drivers SET status = 'busy', current_order_id = $2, last_assigned_at = now(), updated_at = now() WHERE id = $1`,
+      [d.id, req.params.id]
+    );
+    const updated = await setQuickOrderStatus(req.params.id, 'assigned', {
+      dispatcherId: req.staff.id, driverId: d.id, driverSubStatus: 'picked_up',
+    });
+    if (d.staff_user_id) {
+      notify(d.staff_user_id, {
+        title: 'تعيين طلب سريع جديد', body: `طلب ${req.params.id}`, type: 'order_assigned',
+        orderId: req.params.id, recipientType: 'staff',
+      });
+    }
+    emitTo(`driver:${d.id}`, 'driver:assignment', { order_id: req.params.id });
+    sendDriverPush(d.id, {
+      title: 'تعيين طلب سريع جديد', body: `طلب ${req.params.id} جاهز — روح استلمه`,
+      data: { type: 'order_assigned', order_id: req.params.id },
+    });
+    res.json(serializeQuickOrder(updated));
+  } catch (e) { next(e); }
+});
+
+router.post('/quick-orders/:id/unassign', dispatchRole, async (req, res, next) => {
+  try {
+    const b = await loadQuickOrder(req.params.id);
+    if (!b) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+    if (!b.qo.driver_id) return fail(res, 409, 'NOT_ASSIGNED', 'الطلب مش معيّن لدليفري');
+    await db.query(`UPDATE drivers SET status = 'available', current_order_id = NULL, updated_at = now() WHERE id = $1`, [b.qo.driver_id]);
+    const updated = await setQuickOrderStatus(req.params.id, 'accepted', { driverId: null, driverSubStatus: null });
+    res.json(serializeQuickOrder(updated));
+  } catch (e) { next(e); }
+});
+
+router.post('/quick-orders/:id/cancel', dispatchRole, async (req, res, next) => {
+  try {
+    const b = await loadQuickOrder(req.params.id);
+    if (!b) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+    if (b.qo.driver_id) {
+      await db.query(`UPDATE drivers SET status = 'available', current_order_id = NULL, updated_at = now() WHERE id = $1`, [b.qo.driver_id]);
+    }
+    const updated = await setQuickOrderStatus(req.params.id, 'cancelled', { driverId: null, driverSubStatus: null });
+    res.json(serializeQuickOrder(updated));
   } catch (e) { next(e); }
 });
 

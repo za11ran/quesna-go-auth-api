@@ -14,10 +14,22 @@ export default function DispatchQueue() {
   const rows = data?.data || [];
   const available = (drivers.data?.data || []).filter((d) => d.status === 'available' && d.is_online);
 
-  async function act(id, kind, body) {
+  async function act(id, kind, body, isQuick) {
     setBusy(id + kind); setMsg(null);
-    try { await api.post(`/api/dispatch/orders/${id}/${kind}`, body); reload(); drivers.reload(); }
+    try {
+      const base = isQuick ? '/api/dispatch/quick-orders' : '/api/dispatch/orders';
+      await api.post(`${base}/${id}/${kind}`, body);
+      reload(); drivers.reload();
+    }
     catch (e) { setMsg(e.message); } finally { setBusy(null); }
+  }
+
+  function acceptQuick(o) {
+    const input = prompt(`سعر الطلب ده بعد المراجعة (جنيه)؟\n\n${o.notes}`, o.total || '');
+    if (input === null) return;
+    const price = Number(input);
+    if (!price || price <= 0) return;
+    act(o.id, 'accept', { price }, true);
   }
 
   return (
@@ -44,7 +56,31 @@ export default function DispatchQueue() {
                   📞 اتصل بـ {v.vendor_name}{v.vendor_phone ? ` — ${v.vendor_phone}` : ''} لتأكيد الطلب
                 </p>
               ))}
-              {o.driver
+              {o.is_quick && (
+                <p className="page-sub" style={{ margin: '0 0 6px' }}>
+                  📞 اتصل بالعميل ({o.customer?.phone || '—'}) لتأكيد التفاصيل والسعر
+                  {o.images?.length > 0 && ` — مرفق ${o.images.length} صورة`}
+                </p>
+              )}
+
+              {o.is_quick && o.status === 'pending' && (
+                <button className="btn sm primary" disabled={busy === o.id + 'accept'} onClick={() => acceptQuick(o)}>
+                  مراجعة وتسعير
+                </button>
+              )}
+              {o.is_quick && o.status !== 'pending' && (
+                o.driver
+                  ? <div className="row" style={{ justifyContent: 'space-between' }}>
+                      <span>الدليفري: <strong>{o.driver.name}</strong> ({o.driver.phone})</span>
+                      <div className="row">
+                        <ReassignBtn id={o.id} drivers={available} onPick={(d) => act(o.id, 'assign', { driver_id: d }, true)} busy={busy} />
+                        <button className="btn sm" disabled={busy === o.id + 'unassign'} onClick={() => act(o.id, 'unassign', null, true)}>سحب</button>
+                      </div>
+                    </div>
+                  : <ReassignBtn id={o.id} label="تعيين دليفري" drivers={available} onPick={(d) => act(o.id, 'assign', { driver_id: d }, true)} busy={busy} />
+              )}
+
+              {!o.is_quick && (o.driver
                 ? <div className="row" style={{ justifyContent: 'space-between' }}>
                     <span>الدليفري: <strong>{o.driver.name}</strong> ({o.driver.phone})</span>
                     <div className="row">
@@ -55,7 +91,7 @@ export default function DispatchQueue() {
                 : <div className="row">
                     <button className="btn sm primary" disabled={busy === o.id + 'auto-assign'} onClick={() => act(o.id, 'auto-assign')}>تعيين للي عليه الدور</button>
                     <ReassignBtn id={o.id} label="تعيين يدوي" drivers={available} onPick={(d) => act(o.id, 'assign', { driver_id: d })} busy={busy} />
-                  </div>}
+                  </div>)}
             </div>
           ))}
         </div>}

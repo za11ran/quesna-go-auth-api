@@ -2,15 +2,16 @@
 //   POST /driver/auth/login       POST /driver/auth/app-login (من تطبيق العميل)
 //   GET /driver/me
 //   PUT  /driver/status           POST /driver/location    POST /driver/devices
-//   GET  /driver/orders           GET /driver/orders/:id
+//   GET  /driver/orders           GET /driver/orders/:id   (orders + quick_orders مع بعض)
 //   POST /driver/orders/:id/accept    POST /driver/orders/:id/reject
-//   PATCH /driver/orders/:id/status
+//   PATCH /driver/orders/:id/status   (id يبدأ بـ qo_ = طلب سريع، شوف quickOrderView.js)
 //   POST /driver/orders/:id/proof
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const { signStaffToken, staffAuth } = require('./staff-auth');
 const { loadOrder, serializeOrder, setStatus } = require('./orderView');
+const { loadQuickOrder, serializeQuickOrder, setQuickOrderStatus, QO_SUB_FLOW } = require('./quickOrderView');
 const { notify } = require('./notify');
 
 const nowIso = () => new Date().toISOString();
@@ -25,6 +26,10 @@ async function myDriver(req) {
 }
 async function ownsOrder(orderId, driverId) {
   const r = await db.query(`SELECT 1 FROM orders WHERE id = $1 AND driver_id = $2`, [orderId, driverId]);
+  return r.rowCount > 0;
+}
+async function ownsQuickOrder(id, driverId) {
+  const r = await db.query(`SELECT 1 FROM quick_orders WHERE id = $1 AND driver_id = $2`, [id, driverId]);
   return r.rowCount > 0;
 }
 // آخر رد للدليفري على عرض التوصيل بتاع الطلب ده — null لسه معلّق، 'accepted'/'rejected'.
@@ -143,16 +148,30 @@ router.get('/orders', driverRole, async (req, res, next) => {
   try {
     const d = await myDriver(req);
     if (!d) return fail(res, 404, 'DRIVER_NOT_FOUND', 'حساب الدليفري غير مربوط');
-    const { rows } = await db.query(
-      `SELECT id FROM orders WHERE driver_id = $1 ORDER BY placed_at DESC LIMIT 100`, [d.id]
-    );
+    const [ordersRes, quickRes] = await Promise.all([
+      db.query(`SELECT id, placed_at AS at FROM orders WHERE driver_id = $1 ORDER BY placed_at DESC LIMIT 100`, [d.id]),
+      db.query(`SELECT id, created_at AS at FROM quick_orders WHERE driver_id = $1 ORDER BY created_at DESC LIMIT 100`, [d.id]),
+    ]);
+    const combined = [
+      ...ordersRes.rows.map((r) => ({ id: r.id, at: r.at, is_quick: false })),
+      ...quickRes.rows.map((r) => ({ id: r.id, at: r.at, is_quick: true })),
+    ].sort((a, b) => new Date(b.at) - new Date(a.at));
     const data = [];
-    for (const r of rows) {
-      const out = serializeOrder(await loadOrder(r.id));
-      const offer = await driverOfferInfo(r.id, d.id);
-      out.driver_offer_response = offer.response;
-      out.driver_offer_expires_at = offer.expires_at;
-      data.push(out);
+    for (const r of combined) {
+      if (r.is_quick) {
+        const out = serializeQuickOrder(await loadQuickOrder(r.id));
+        // الطلب السريع مالوش delivery_offers (شوف quickOrderView.js) — التعيين
+        // مباشر من المشرف، فمفيش "قبول/رفض" مطلوب من الدليفري خالص.
+        out.driver_offer_response = 'accepted';
+        out.driver_offer_expires_at = null;
+        data.push(out);
+      } else {
+        const out = serializeOrder(await loadOrder(r.id));
+        const offer = await driverOfferInfo(r.id, d.id);
+        out.driver_offer_response = offer.response;
+        out.driver_offer_expires_at = offer.expires_at;
+        data.push(out);
+      }
     }
     res.json({ data });
   } catch (e) { next(e); }
@@ -161,7 +180,15 @@ router.get('/orders', driverRole, async (req, res, next) => {
 router.get('/orders/:id', driverRole, async (req, res, next) => {
   try {
     const d = await myDriver(req);
-    if (!d || !(await ownsOrder(req.params.id, d.id))) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+    if (!d) return fail(res, 404, 'DRIVER_NOT_FOUND', 'حساب الدليفري غير مربوط');
+    if (req.params.id.startsWith('qo_')) {
+      if (!(await ownsQuickOrder(req.params.id, d.id))) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+      const out = serializeQuickOrder(await loadQuickOrder(req.params.id));
+      out.driver_offer_response = 'accepted';
+      out.driver_offer_expires_at = null;
+      return res.json(out);
+    }
+    if (!(await ownsOrder(req.params.id, d.id))) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
     const b = await loadOrder(req.params.id);
     const out = serializeOrder(b);
     // عناوين وأرقام مفيدة للدليفري
@@ -226,7 +253,38 @@ const DRIVER_FLOW = {
 router.patch('/orders/:id/status', driverRole, async (req, res, next) => {
   try {
     const d = await myDriver(req);
-    if (!d || !(await ownsOrder(req.params.id, d.id))) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+    if (!d) return fail(res, 404, 'DRIVER_NOT_FOUND', 'حساب الدليفري غير مربوط');
+
+    if (req.params.id.startsWith('qo_')) {
+      if (!(await ownsQuickOrder(req.params.id, d.id))) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
+      const qb = await loadQuickOrder(req.params.id);
+      const cur = qb.qo.driver_sub_status || 'picked_up';
+      const to = String((req.body || {}).status || '');
+      if (QO_SUB_FLOW[cur] !== to) {
+        return fail(res, 409, 'INVALID_TRANSITION', `التالي بعد ${cur} هو ${QO_SUB_FLOW[cur] || '—'}`);
+      }
+      // status الطلب السريع بيتبع sub_status هنا (مفيش preparing/ready_for_pickup
+      // بينهم زي الطلب العادي — الدليفري بيستلم المهمة على طول وقت التعيين).
+      const orderStatus = ['on_the_way', 'arrived', 'delivered'].includes(to) ? to : qb.qo.status;
+      const updated = await setQuickOrderStatus(req.params.id, orderStatus, { driverSubStatus: to });
+      if (to === 'delivered') {
+        await db.query(
+          `UPDATE drivers SET status = 'available', current_order_id = NULL, deliveries_count = deliveries_count + 1, updated_at = now() WHERE id = $1`,
+          [d.id]
+        );
+      }
+      await notify(updated.qo.customer_id, {
+        title: { ar: 'تحديث طلبك السريع', en: 'Quick order update' },
+        body: { ar: `طلبك ${req.params.id} — ${to}`, en: `Order ${req.params.id} — ${to}` },
+        type: 'order_on_the_way', orderId: req.params.id,
+      });
+      const out = serializeQuickOrder(updated);
+      out.driver_offer_response = 'accepted';
+      out.driver_offer_expires_at = null;
+      return res.json(out);
+    }
+
+    if (!(await ownsOrder(req.params.id, d.id))) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
     const b = await loadOrder(req.params.id);
     const cur = b.order.driver_sub_status || 'heading_to_vendor';
     const to = String((req.body || {}).status || '');
