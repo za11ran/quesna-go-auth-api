@@ -182,11 +182,17 @@ router.post('/orders/:id/accept', driverRole, async (req, res, next) => {
   try {
     const d = await myDriver(req);
     if (!d || !(await ownsOrder(req.params.id, d.id))) return fail(res, 404, 'ORDER_NOT_FOUND', 'الطلب غير موجود');
-    await db.query(
+    const upd = await db.query(
       `UPDATE delivery_offers SET response = 'accepted', responded_at = now()
         WHERE order_id = $1 AND driver_id = $2 AND response IS NULL`,
       [req.params.id, d.id]
     );
+    // لو صفر صفوف اتحدّثوا، يبقى العرض ده اتلغى فعلًا قبل ما نلحق (worker.js
+    // لغّاه بعد انتهاء المهلة، أو رفضه/قبله طلب سابق) — من غير الشيك ده كان
+    // بيرجع نجاح وهمي والطلب يختفي من قايمة الدليفري من غير أي تفسير.
+    if (upd.rowCount === 0) {
+      return fail(res, 409, 'OFFER_EXPIRED', 'انتهت مهلة قبول الطلب ده أو اتلغى');
+    }
     await db.query(`UPDATE orders SET driver_sub_status = 'heading_to_vendor' WHERE id = $1`, [req.params.id]);
     res.json(serializeOrder(await loadOrder(req.params.id)));
   } catch (e) { next(e); }
