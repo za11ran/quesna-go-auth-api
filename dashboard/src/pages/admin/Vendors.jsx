@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api, apiBase } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, Modal, Field, statusTone } from '../../ui';
+import { useAsync, ErrBox, Empty, Pill, Modal, Field, statusTone, label, VENDOR_TYPES } from '../../ui';
 
 export default function Vendors() {
   const { data, loading, error, reload } = useAsync(() => api.get('/api/admin/vendors'));
@@ -47,8 +47,8 @@ export default function Vendors() {
                 <tr key={v.id}>
                   <td>{v.id}</td>
                   <td>{v.name_ar}</td>
-                  <td>{v.type}</td>
-                  <td><Pill tone={statusTone(v.status)}>{v.status}</Pill></td>
+                  <td>{label(v.type)}</td>
+                  <td><Pill tone={statusTone(v.status)}>{label(v.status)}</Pill></td>
                   <td>{v.is_open ? '✓' : '✕'}</td>
                   <td>
                     <select
@@ -123,7 +123,7 @@ function CreateVendor({ onClose, onDone }) {
       <Field label="اسم المتجر (إنجليزي)"><input value={f.name_en} onChange={set('name_en')} /></Field>
       <Field label="النوع">
         <select value={f.type} onChange={set('type')}>
-          {['restaurant', 'supermarket', 'pharmacy', 'bakery', 'cafe', 'vegetables', 'other'].map((t) => <option key={t} value={t}>{t}</option>)}
+          {VENDOR_TYPES.map(([t, l]) => <option key={t} value={t}>{l}</option>)}
         </select>
       </Field>
       <Field label="تليفون"><input value={f.phone} onChange={set('phone')} /></Field>

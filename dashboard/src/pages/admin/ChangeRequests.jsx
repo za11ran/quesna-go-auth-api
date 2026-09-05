@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, Modal, Field } from '../../ui';
+import { useAsync, ErrBox, Empty, Pill, Modal, Field, label } from '../../ui';
 
 const TYPE_AR = { vendor: 'المتجر', product: 'منتج', product_option: 'حجم', offer: 'عرض' };
 const ACTION_AR = { create: 'إضافة', update: 'تعديل', delete: 'حذف' };
@@ -83,7 +83,7 @@ function ReviewModal({ id, onClose, onDone }) {
           <div className="row" style={{ marginBottom: 10 }}>
             <Pill tone="blue">{TYPE_AR[cr.entity_type] || cr.entity_type}</Pill>
             <Pill>{ACTION_AR[cr.action] || cr.action}</Pill>
-            <Pill tone={cr.status === 'pending' ? 'warn' : cr.status === 'approved' ? 'ok' : 'danger'}>{cr.status}</Pill>
+            <Pill tone={cr.status === 'pending' ? 'warn' : cr.status === 'approved' ? 'ok' : 'danger'}>{label(cr.status)}</Pill>
           </div>
           <table className="diff">
             <thead><tr><th>الحقل</th><th>قبل</th><th>بعد</th></tr></thead>

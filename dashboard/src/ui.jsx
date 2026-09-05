@@ -36,6 +36,42 @@ const STATUS_TONE = {
 };
 export const statusTone = (s) => STATUS_TONE[s] || '';
 
+// ترجمة القيم الخام (status/type/by_role...) اللي جايّة من الـ API بالإنجليزي
+// لعرض عربي في كل صفحات اللوحة — واحدة مركزية بدل ما تتكرر في كل صفحة.
+const LABELS = {
+  // حالة الطلب
+  pending: 'قيد المراجعة', accepted: 'مقبول', preparing: 'قيد التحضير',
+  ready_for_pickup: 'جاهز للاستلام', assigned: 'معيّن', picked_up: 'تم الاستلام',
+  on_the_way: 'في الطريق', arrived: 'وصل العميل', delivered: 'تم التسليم',
+  rejected: 'مرفوض', cancelled: 'ملغي',
+  // حالة التاجر
+  approved: 'موافَق عليه', suspended: 'معلّق',
+  // حالة الدليفري
+  available: 'متاح', busy: 'مشغول', offline: 'غير متصل',
+  // الدفع
+  cash: 'كاش', card: 'بطاقة', wallet: 'محفظة', paid: 'مدفوع', failed: 'فشل',
+  // المركبة
+  motorcycle: 'موتوسيكل', car: 'عربية', bicycle: 'دراجة',
+  // مين عمل التغيير (سجل الحالة)
+  customer: 'العميل', system: 'النظام', vendor: 'التاجر', dispatcher: 'المشرف',
+  driver: 'الدليفري', admin: 'الأدمن',
+  'dispatcher(reassign)': 'المشرف (إعادة تعيين)', 'dispatcher(unassign)': 'المشرف (إلغاء تعيين)',
+  'driver(reject)': 'الدليفري (رفض)', 'system(offer_timeout)': 'النظام (انتهت المهلة)',
+  // sub_status التوصيل
+  heading_to_vendor: 'في الطريق للمتجر', at_vendor: 'وصل المتجر',
+  // نوع المتجر
+  restaurant: 'مطعم', supermarket: 'سوبر ماركت', pharmacy: 'صيدلية', bakery: 'مخبز',
+  cafe: 'كافيه', vegetables: 'خضار وفاكهة', clothing: 'ملابس', stationery: 'مكتبة', other: 'أخرى',
+  // نوع قسم الهوم
+  vendors: 'تجّار', products: 'منتجات',
+};
+export const label = (s) => LABELS[s] ?? s;
+
+// نفس القايمة كأزواج [قيمة, تسمية] لبناء dropdowns (إنشاء/تعديل متجر).
+export const VENDOR_TYPES = [
+  'restaurant', 'supermarket', 'pharmacy', 'bakery', 'cafe', 'vegetables', 'clothing', 'stationery', 'other',
+].map((t) => [t, LABELS[t]]);
+
 export function Modal({ title, onClose, children, footer }) {
   return (
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>

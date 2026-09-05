@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, Money, statusTone, Modal } from '../../ui';
+import { useAsync, ErrBox, Empty, Pill, Money, statusTone, Modal, label } from '../../ui';
 
 const STATUSES = ['', 'pending', 'accepted', 'preparing', 'ready_for_pickup', 'assigned', 'picked_up', 'on_the_way', 'delivered', 'rejected', 'cancelled'];
 
@@ -20,7 +20,7 @@ export default function AdminOrders() {
       <p className="page-sub">كل طلبات المنصة</p>
       <div className="row" style={{ marginBottom: 12 }}>
         <select className="btn sm" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
-          {STATUSES.map((s) => <option key={s} value={s}>{s || 'كل الحالات'}</option>)}
+          {STATUSES.map((s) => <option key={s} value={s}>{s ? label(s) : 'كل الحالات'}</option>)}
         </select>
         {meta && <span className="page-sub">إجمالي: {meta.total}</span>}
       </div>
@@ -34,9 +34,9 @@ export default function AdminOrders() {
               : rows.map((o) => (
                 <tr key={o.id}>
                   <td>{o.id}</td>
-                  <td><Pill tone={statusTone(o.status)}>{o.status}</Pill></td>
+                  <td><Pill tone={statusTone(o.status)}>{label(o.status)}</Pill></td>
                   <td><Money v={o.total} /></td>
-                  <td>{o.payment_method} / {o.payment_status}</td>
+                  <td>{label(o.payment_method)} / {label(o.payment_status)}</td>
                   <td>{o.driver_id || '—'}</td>
                   <td>{new Date(o.placed_at).toLocaleString('ar-EG')}</td>
                   <td><button className="btn sm" onClick={() => setOpenId(o.id)}>سجل الحالة</button></td>
@@ -65,7 +65,7 @@ function OrderHistory({ orderId, onClose }) {
       <ErrBox error={error} />
       {data && (
         <p className="page-sub" style={{ marginBottom: 12 }}>
-          الحالة الحالية: <Pill tone={statusTone(data.status)}>{data.status}</Pill>
+          الحالة الحالية: <Pill tone={statusTone(data.status)}>{label(data.status)}</Pill>
           {' · '}الدليفري: {data.driver?.name || '—'}
         </p>
       )}
@@ -76,8 +76,8 @@ function OrderHistory({ orderId, onClose }) {
             : history.length === 0 ? <tr><td colSpan={3}><Empty /></td></tr>
             : history.map((h, i) => (
               <tr key={i}>
-                <td><Pill tone={statusTone(h.status)}>{h.status}</Pill></td>
-                <td>{h.by}</td>
+                <td><Pill tone={statusTone(h.status)}>{label(h.status)}</Pill></td>
+                <td>{label(h.by)}</td>
                 <td>{new Date(h.at).toLocaleString('ar-EG')}</td>
               </tr>
             ))}

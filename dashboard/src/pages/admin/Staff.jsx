@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, Modal, Field, statusTone } from '../../ui';
+import { useAsync, ErrBox, Empty, Pill, Modal, Field, statusTone, label } from '../../ui';
 
 // kind: 'drivers' | 'dispatchers'
 export default function Staff({ kind }) {
@@ -38,7 +38,7 @@ export default function Staff({ kind }) {
                   <td>{r.name}</td>
                   <td>{r.phone || '—'}</td>
                   <td>{r.email || '—'}</td>
-                  {isDriver && <td><Pill tone={statusTone(r.status)}>{r.status}</Pill></td>}
+                  {isDriver && <td><Pill tone={statusTone(r.status)}>{label(r.status)}</Pill></td>}
                   {isDriver && <td>{r.deliveries_count}</td>}
                   <td>{(isDriver ? r.account_active : r.is_active) === false ? '✕' : '✓'}</td>
                   {isDriver && (
@@ -119,7 +119,7 @@ function CreateStaff({ isDriver, onClose, onDone }) {
       <Field label="كلمة السر"><input value={f.password} onChange={set('password')} /></Field>
       {isDriver && (
         <div className="grid k2">
-          <Field label="المركبة"><select value={f.vehicle_type} onChange={set('vehicle_type')}>{['motorcycle', 'car', 'bicycle'].map((v) => <option key={v}>{v}</option>)}</select></Field>
+          <Field label="المركبة"><select value={f.vehicle_type} onChange={set('vehicle_type')}>{['motorcycle', 'car', 'bicycle'].map((v) => <option key={v} value={v}>{label(v)}</option>)}</select></Field>
           <Field label="المنطقة"><input value={f.zone} onChange={set('zone')} /></Field>
         </div>
       )}

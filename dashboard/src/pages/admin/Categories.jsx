@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api, apiBase } from '../../api';
-import { useAsync, ErrBox, Empty, Modal, Field } from '../../ui';
+import { useAsync, ErrBox, Empty, Modal, Field, label } from '../../ui';
 
 export default function Categories() {
   const { data, loading, error, reload } = useAsync(() => api.get('/api/admin/categories'));
@@ -21,7 +21,7 @@ export default function Categories() {
               : rows.length === 0 ? <tr><td colSpan={7}><Empty /></td></tr>
               : rows.map((c) => (
                 <tr key={c.id}>
-                  <td>{c.id}</td><td>{c.name_ar}</td><td>{c.type}/{c.action || '—'}</td>
+                  <td>{c.id}</td><td>{c.name_ar}</td><td>{label(c.type)}/{c.action || '—'}</td>
                   <td>{c.sort_order}</td><td>{c.is_active ? '✓' : '✕'}</td>
                   <td>
                     {c.image && <img src={apiBase + c.image} width={32} height={32} style={{ borderRadius: 6, objectFit: 'cover' }} alt="" />}

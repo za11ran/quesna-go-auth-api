@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { api } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, Money, statusTone } from '../../ui';
+import { useAsync, ErrBox, Empty, Pill, Money, statusTone, label } from '../../ui';
 import { useLive } from '../../socket';
 
 const SUB_NEXT = {
@@ -52,7 +52,7 @@ export default function Driver() {
             disabled={busy === 'toggleOnline'}
             onClick={toggleOnline}
           >
-            {d.status === 'offline' ? 'ابدأ العمل (أونلاين)' : 'إيقاف (أوفلاين)'}
+            {d.status === 'offline' ? 'بدء شغل' : 'إيقاف شغل'}
           </button>
         )}
       </div>
@@ -74,12 +74,12 @@ export default function Driver() {
                   <div key={o.id} className="card card-pad">
                     <div className="row" style={{ justifyContent: 'space-between' }}>
                       <strong>{o.id}</strong>
-                      <Pill tone={statusTone(o.status)}>{o.status} · {sub}</Pill>
+                      <Pill tone={statusTone(o.status)}>{label(o.status)} · {label(sub)}</Pill>
                     </div>
                     <p className="page-sub" style={{ margin: '6px 0' }}>
                       <b>الاستلام:</b> {pickup.map((p) => `${p.name} (${p.phone || '—'})`).join('، ')}<br />
                       <b>التسليم:</b> {o.customer?.name} ({o.customer?.phone})<br />
-                      {o.address_text} · <Money v={o.total} /> ({o.payment_method})
+                      {o.address_text} · <Money v={o.total} /> ({label(o.payment_method)})
                     </p>
                     <div className="row">
                       {pendingAcceptance && (
@@ -104,7 +104,7 @@ export default function Driver() {
                 <table>
                   <thead><tr><th>#</th><th>العميل</th><th>الإجمالي</th><th>الحالة</th></tr></thead>
                   <tbody>{done.map((o) => (
-                    <tr key={o.id}><td>{o.id}</td><td>{o.customer?.name}</td><td><Money v={o.total} /></td><td><Pill tone={statusTone(o.status)}>{o.status}</Pill></td></tr>
+                    <tr key={o.id}><td>{o.id}</td><td>{o.customer?.name}</td><td><Money v={o.total} /></td><td><Pill tone={statusTone(o.status)}>{label(o.status)}</Pill></td></tr>
                   ))}</tbody>
                 </table>
               </div>

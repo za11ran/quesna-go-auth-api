@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { api } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, Money, statusTone } from '../../ui';
+import { useAsync, ErrBox, Empty, Pill, Money, statusTone, label as trLabel } from '../../ui';
 import { useLive } from '../../socket';
 
 export default function DispatchQueue() {
@@ -33,7 +33,7 @@ export default function DispatchQueue() {
             <div key={o.id} className="card card-pad">
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <strong>{o.id}</strong>
-                <Pill tone={statusTone(o.status)}>{o.status}{o.driver_sub_status ? ` · ${o.driver_sub_status}` : ''}</Pill>
+                <Pill tone={statusTone(o.status)}>{trLabel(o.status)}{o.driver_sub_status ? ` · ${trLabel(o.driver_sub_status)}` : ''}</Pill>
               </div>
               <p className="page-sub" style={{ margin: '6px 0' }}>
                 {o.vendors.map((v) => v.vendor_name).join('، ')} → {o.customer?.name}<br />

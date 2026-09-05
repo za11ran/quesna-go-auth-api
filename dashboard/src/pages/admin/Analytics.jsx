@@ -1,5 +1,5 @@
 import { api } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, Money, statusTone, Table } from '../../ui';
+import { useAsync, ErrBox, Empty, Pill, Money, statusTone, Table, label } from '../../ui';
 
 export default function Analytics() {
   const { data, loading, error } = useAsync(() => api.get('/api/admin/analytics'));
@@ -27,7 +27,7 @@ export default function Analytics() {
               <td>{d.phone || '—'}</td>
               <td>
                 <div className="row">
-                  <Pill tone={statusTone(d.status)}>{d.status}</Pill>
+                  <Pill tone={statusTone(d.status)}>{label(d.status)}</Pill>
                   {d.is_online && <Pill tone="ok">أونلاين</Pill>}
                 </div>
               </td>
@@ -49,7 +49,7 @@ export default function Analytics() {
           vendors.map((v) => (
             <tr key={v.id}>
               <td>{v.name_ar}</td>
-              <td>{v.type}</td>
+              <td>{label(v.type)}</td>
               <td>{v.orders_count}</td>
               <td>{v.orders_delivered}</td>
               <td><Money v={v.revenue_delivered} /></td>

@@ -1,5 +1,5 @@
 import { api } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, statusTone } from '../../ui';
+import { useAsync, ErrBox, Empty, Pill, statusTone, label } from '../../ui';
 
 export default function DispatchDrivers() {
   const list = useAsync(() => api.get('/api/dispatch/drivers'));
@@ -30,8 +30,8 @@ export default function DispatchDrivers() {
                 <tr key={d.id}>
                   <td>{d.name}</td>
                   <td>{d.phone}</td>
-                  <td>{d.vehicle_type}</td>
-                  <td><Pill tone={statusTone(d.status)}>{d.status}</Pill></td>
+                  <td>{label(d.vehicle_type)}</td>
+                  <td><Pill tone={statusTone(d.status)}>{label(d.status)}</Pill></td>
                   <td>{d.is_online ? '✓' : '✕'}</td>
                   <td>{d.zone || '—'}</td>
                   <td>{d.deliveries_count}</td>

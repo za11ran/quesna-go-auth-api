@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { api } from '../../api';
-import { useAsync, ErrBox, Empty, Pill, Money, statusTone } from '../../ui';
+import { useAsync, ErrBox, Empty, Pill, Money, statusTone, label } from '../../ui';
 import { useLive } from '../../socket';
 
 const NEXT = {
@@ -52,7 +52,7 @@ export default function VendorOrders() {
             <div key={o.id} className="card card-pad">
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <strong>{o.id}</strong>
-                <Pill tone={statusTone(o.status)}>{o.status}</Pill>
+                <Pill tone={statusTone(o.status)}>{label(o.status)}</Pill>
               </div>
               <p className="page-sub" style={{ margin: '6px 0' }}>
                 {o.customer?.name} · {o.customer?.phone}<br />{o.address_text}
