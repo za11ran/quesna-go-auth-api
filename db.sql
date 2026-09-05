@@ -544,6 +544,9 @@ CREATE TABLE IF NOT EXISTS drivers (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status, is_online);
+-- الأدمن بيفعّلها لكل دليفري لوحده — تحكّم في دخول الدليفري من تطبيق العميل
+-- (زرار "دخول كدليفري" في صفحة البروفايل)، منفصل عن دخوله للوحة التحكم على الويب.
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS app_access_enabled BOOLEAN NOT NULL DEFAULT false;
 
 -- حالة الدليفري الفرعية داخل التوصيل
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS driver_sub_status VARCHAR(20);

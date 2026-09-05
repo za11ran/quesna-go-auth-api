@@ -1,5 +1,6 @@
 // Driver App API — BACKEND_HANDOFF.md §4
-//   POST /driver/auth/login       GET /driver/me
+//   POST /driver/auth/login       POST /driver/auth/app-login (من تطبيق العميل)
+//   GET /driver/me
 //   PUT  /driver/status           POST /driver/location
 //   GET  /driver/orders           GET /driver/orders/:id
 //   POST /driver/orders/:id/accept    POST /driver/orders/:id/reject
@@ -55,6 +56,28 @@ router.post('/auth/login', async (req, res, next) => {
     await db.query(`UPDATE staff_users SET last_login_at = now() WHERE id = $1`, [s.id]);
     const d = (await db.query(`SELECT * FROM drivers WHERE staff_user_id = $1`, [s.id])).rows[0];
     res.json({ token: signStaffToken(s), driver: d || null, user: { id: s.id, name: s.name } });
+  } catch (e) { next(e); }
+});
+
+// دخول الدليفري من تطبيق العميل — نفس بيانات لوحة التحكم، لكن لازم الأدمن يكون
+// فعّل app_access_enabled لصاحب الرقم ده تحديدًا (منفصل عن دخول لوحة التحكم على
+// الويب، اللي فاضل شغّال زي ما هو من غير القيد ده).
+router.post('/auth/app-login', async (req, res, next) => {
+  try {
+    const { phone, password } = req.body || {};
+    if (!password || !phone) return fail(res, 422, 'MISSING_CREDENTIALS', 'البيانات ناقصة');
+    const { rows } = await db.query(
+      `SELECT * FROM staff_users WHERE role = 'driver' AND phone = $1 LIMIT 1`,
+      [phone]
+    );
+    const s = rows[0];
+    if (!s || !s.is_active || !(await bcrypt.compare(String(password), s.password_hash)))
+      return fail(res, 401, 'INVALID_LOGIN', 'بيانات الدخول غير صحيحة');
+    const d = (await db.query(`SELECT * FROM drivers WHERE staff_user_id = $1`, [s.id])).rows[0];
+    if (!d || !d.app_access_enabled)
+      return fail(res, 403, 'APP_ACCESS_DISABLED', 'الدخول من التطبيق غير مفعّل لحسابك — تواصل مع الإدارة');
+    await db.query(`UPDATE staff_users SET last_login_at = now() WHERE id = $1`, [s.id]);
+    res.json({ token: signStaffToken(s), driver: d, user: { id: s.id, name: s.name } });
   } catch (e) { next(e); }
 });
 

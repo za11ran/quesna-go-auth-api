@@ -8,7 +8,14 @@ export default function Staff({ kind }) {
   const { data, loading, error, reload } = useAsync(() => api.get(`/api/admin/${kind}`), [kind]);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [busyId, setBusyId] = useState(null);
   const rows = data?.data || [];
+
+  async function toggleAppAccess(id, enabled) {
+    setBusyId(id);
+    try { await api.put(`/api/admin/drivers/${id}`, { app_access_enabled: enabled }); reload(); }
+    finally { setBusyId(null); }
+  }
 
   return (
     <>
@@ -22,10 +29,10 @@ export default function Staff({ kind }) {
       <ErrBox error={error} />
       <div className="card" style={{ overflow: 'auto' }}>
         <table>
-          <thead><tr><th>الاسم</th><th>الموبايل</th><th>الإيميل</th>{isDriver && <th>الحالة</th>}{isDriver && <th>توصيلات</th>}<th>مفعّل؟</th><th></th></tr></thead>
+          <thead><tr><th>الاسم</th><th>الموبايل</th><th>الإيميل</th>{isDriver && <th>الحالة</th>}{isDriver && <th>توصيلات</th>}<th>مفعّل؟</th>{isDriver && <th>دخول من التطبيق</th>}<th></th></tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={7} className="empty">تحميل…</td></tr>
-              : rows.length === 0 ? <tr><td colSpan={7}><Empty /></td></tr>
+            {loading ? <tr><td colSpan={8} className="empty">تحميل…</td></tr>
+              : rows.length === 0 ? <tr><td colSpan={8}><Empty /></td></tr>
               : rows.map((r) => (
                 <tr key={r.id}>
                   <td>{r.name}</td>
@@ -34,6 +41,16 @@ export default function Staff({ kind }) {
                   {isDriver && <td><Pill tone={statusTone(r.status)}>{r.status}</Pill></td>}
                   {isDriver && <td>{r.deliveries_count}</td>}
                   <td>{(isDriver ? r.account_active : r.is_active) === false ? '✕' : '✓'}</td>
+                  {isDriver && (
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={!!r.app_access_enabled}
+                        disabled={busyId === r.id}
+                        onChange={(e) => toggleAppAccess(r.id, e.target.checked)}
+                      />
+                    </td>
+                  )}
                   <td><button className="btn sm" onClick={() => setEditing(r)}>تعديل</button></td>
                 </tr>
               ))}

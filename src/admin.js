@@ -569,6 +569,10 @@ router.put('/drivers/:id', adminOnly, async (req, res, next) => {
       if (b[k] === undefined) continue;
       params.push(String(b[k])); cols.push(`${k} = $${params.length}`);
     }
+    if (b.app_access_enabled !== undefined) {
+      params.push(b.app_access_enabled === true || b.app_access_enabled === 'true');
+      cols.push(`app_access_enabled = $${params.length}`);
+    }
     if (b.is_active !== undefined) {
       await db.query(`UPDATE staff_users SET is_active = $2 WHERE driver_id = $1`, [req.params.id, b.is_active !== false]);
     }
